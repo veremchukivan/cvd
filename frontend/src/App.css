@@ -20,6 +20,42 @@
   color: var(--text);
 }
 
+.app-shell {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  padding: 18px 14px;
+  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(8, 15, 32, 0.74));
+  backdrop-filter: blur(4px);
+}
+
+.app-sidebar-title {
+  margin: 4px 0 10px;
+  font-size: 24px;
+}
+
+.app-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.app-nav .pill {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.app-main {
+  min-width: 0;
+}
+
 .page {
   max-width: 1400px;
   margin: 0 auto;
@@ -390,13 +426,21 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 .trend-chart-card {
+  min-width: 0;
   background: var(--muted-card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
+  overflow: hidden;
+}
+
+.trend-plot-frame {
+  width: 100%;
+  min-height: 220px;
 }
 
 .panel-error {
@@ -444,6 +488,67 @@
   text-align: center;
 }
 
+.compare-page .page-header {
+  margin-bottom: 14px;
+}
+
+.compare-filter-bar {
+  margin-bottom: 14px;
+}
+
+.compare-summary-grid {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.compare-summary-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.compare-chart-card {
+  margin-top: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+
+.compare-plot-frame {
+  width: 100%;
+  min-height: 320px;
+}
+
+.compare-mini-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.compare-mini-card {
+  min-width: 0;
+  background: var(--muted-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.compare-mini-headline {
+  margin: 8px 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.compare-mini-plot-frame {
+  width: 100%;
+  min-height: 170px;
+}
+
 .banner {
   padding: 10px 12px;
   border-radius: 10px;
@@ -456,7 +561,87 @@
   color: #ffd7d1;
 }
 
+.world-page .page-header {
+  margin-bottom: 14px;
+}
+
+.world-filter-bar {
+  margin-bottom: 14px;
+}
+
+.world-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.world-kpi-card {
+  background: var(--muted-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.world-kpi-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.world-kpi-value {
+  margin: 8px 0 2px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.world-kpi-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.world-chart-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.world-chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.world-plot-frame {
+  width: 100%;
+  min-height: 340px;
+}
+
 @media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 18px;
+  }
+
+  .app-nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
   .map-stage {
     width: 100%;
   }
@@ -464,9 +649,25 @@
   .trend-chart-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .compare-mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .world-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .world-chart-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
+  .app-sidebar {
+    padding: 12px 16px;
+  }
+
   .page {
     padding: 20px 16px 48px;
   }
@@ -494,6 +695,18 @@
   }
 
   .trend-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .world-kpi-grid {
     grid-template-columns: 1fr;
   }
 }

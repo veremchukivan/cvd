@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchSummary } from '../api/map';
-import { MapQuery, ValuesByIso3 } from '../types/map';
+import { MapQuery, Metric, ValuesByIso3 } from '../types/map';
 
 type UseMapSummaryInput = MapQuery;
 
@@ -12,10 +12,11 @@ type UseMapSummaryResult = {
 };
 
 export function useMapSummary(input: UseMapSummaryInput): UseMapSummaryResult {
+  const apiMetric = mapMetricToTodayMetric(input.metric);
   const params: Parameters<typeof fetchSummary>[0] =
     input.dateMode === 'day'
-      ? { metric: input.metric, date: input.date }
-      : { metric: input.metric, from: input.range.from, to: input.range.to };
+      ? { metric: apiMetric, date: input.date }
+      : { metric: apiMetric, from: input.range.from, to: input.range.to };
 
   const query = useQuery({
     queryKey: ['map-summary', params],
@@ -41,4 +42,11 @@ export function useMapSummary(input: UseMapSummaryInput): UseMapSummaryResult {
     isLoading: query.isPending,
     isError: Boolean(query.error),
   };
+}
+
+function mapMetricToTodayMetric(metric: Metric): Parameters<typeof fetchSummary>[0]['metric'] {
+  if (metric === 'cases') return 'today_cases';
+  if (metric === 'deaths') return 'today_deaths';
+  if (metric === 'recovered') return 'today_recovered';
+  return metric;
 }

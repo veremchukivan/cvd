@@ -7,6 +7,9 @@ export type Metric =
   | 'incidence'
   | 'mortality';
 
+export type TodayMetric = 'today_cases' | 'today_deaths' | 'today_recovered';
+export type SummaryMetric = Metric | TodayMetric;
+
 export type MapMode = 'choropleth' | 'markers' | 'heatmap';
 
 export type DateMode = 'day' | 'range';
@@ -31,23 +34,54 @@ export type MapQuery =
 export type CountryDetailsQuery =
   | {
       iso3: string;
-      metric: Metric;
+      metric: SummaryMetric;
       dateMode: 'day';
       date: string;
     }
   | {
       iso3: string;
-      metric: Metric;
+      metric: SummaryMetric;
       dateMode: 'range';
       range: DateRange;
     };
 
 export type ValuesByIso3 = Record<string, number>;
 
+export interface CountryTotalsSnapshot {
+  cases?: number | null;
+  deaths?: number | null;
+  recovered?: number | null;
+  active?: number | null;
+  tests?: number | null;
+  incidence?: number | null;
+  mortality?: number | null;
+  today_cases?: number | null;
+  today_deaths?: number | null;
+  today_recovered?: number | null;
+}
+
+export interface DailyPeakDatum {
+  value?: number | null;
+  date?: string | null;
+}
+
+export interface CountryDailyPeaks {
+  cases?: DailyPeakDatum;
+  deaths?: DailyPeakDatum;
+  recovered?: DailyPeakDatum;
+  active?: DailyPeakDatum;
+  tests?: DailyPeakDatum;
+}
+
+export interface CountryDataCoverage {
+  overallLatest?: string | null;
+  latestByMetric?: Record<string, string | null>;
+}
+
 export interface CountryDetailsResponse {
   iso3: string;
   name?: string | null;
-  metric: Metric;
+  metric: SummaryMetric;
   headline: number | null;
   series: Array<{ date: string; value: number | null }>;
   average?: number | null;
@@ -55,15 +89,10 @@ export interface CountryDetailsResponse {
   from?: string | null;
   to?: string | null;
   date?: string | null;
-  snapshot?: {
-    cases?: number | null;
-    deaths?: number | null;
-    recovered?: number | null;
-    active?: number | null;
-    tests?: number | null;
-    incidence?: number | null;
-    mortality?: number | null;
-  };
+  totals?: CountryTotalsSnapshot;
+  dailyPeaks?: CountryDailyPeaks;
+  coverage?: CountryDataCoverage;
+  snapshot?: CountryTotalsSnapshot;
 }
 
 export interface SummaryDatum {
@@ -77,7 +106,7 @@ export interface SummaryDatum {
 
 export interface SummaryResponse {
   data: SummaryDatum[];
-  metric: Metric;
+  metric: SummaryMetric;
   from: string;
   to: string;
 }

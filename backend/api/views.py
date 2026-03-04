@@ -24,6 +24,12 @@ SNAPSHOT_METRICS = (
     "today_deaths",
     "today_recovered",
 )
+PEAK_TOTAL_METRICS = ("cases", "deaths", "recovered", "active", "tests")
+TODAY_METRIC_BY_TOTAL = {
+    "cases": "today_cases",
+    "deaths": "today_deaths",
+    "recovered": "today_recovered",
+}
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -319,6 +325,78 @@ def _build_country_snapshot(location: Location, anchor_date: date | None) -> dic
     return snapshot
 
 
+def _build_country_daily_peak(
+    location: Location,
+    total_metric: str,
+    anchor_date: date | None,
+) -> dict:
+    today_metric = TODAY_METRIC_BY_TOTAL.get(total_metric)
+    if today_metric:
+        today_qs = DataPoint.objects.filter(location=location, metric=today_metric)
+        if anchor_date:
+            today_qs = today_qs.filter(date__lte=anchor_date)
+        peak_point = today_qs.order_by("-value", "date").first()
+        if peak_point and float(peak_point.value or 0) > 0:
+            return {
+                "value": _round(peak_point.value),
+                "date": peak_point.date.isoformat(),
+            }
+
+    total_qs = DataPoint.objects.filter(location=location, metric=total_metric)
+    if anchor_date:
+        total_qs = total_qs.filter(date__lte=anchor_date)
+    ordered = list(total_qs.order_by("date"))
+    if len(ordered) < 2:
+        return {"value": None, "date": None}
+
+    peak_value = 0.0
+    peak_date: date | None = None
+    previous = float(ordered[0].value or 0)
+    for point in ordered[1:]:
+        current = float(point.value or 0)
+        delta = max(current - previous, 0)
+        if delta > peak_value:
+            peak_value = delta
+            peak_date = point.date
+        previous = current
+
+    if peak_date is None or peak_value <= 0:
+        return {"value": None, "date": None}
+    return {
+        "value": _round(peak_value),
+        "date": peak_date.isoformat(),
+    }
+
+
+def _build_country_daily_peaks(location: Location, anchor_date: date | None) -> dict:
+    return {
+        metric: _build_country_daily_peak(location, metric, anchor_date=anchor_date)
+        for metric in PEAK_TOTAL_METRICS
+    }
+
+
+def _build_country_coverage(location: Location, anchor_date: date | None) -> dict:
+    latest_by_metric: dict[str, str | None] = {}
+    latest_dates: list[date] = []
+
+    for metric in SNAPSHOT_METRICS:
+        qs = DataPoint.objects.filter(location=location, metric=metric)
+        if anchor_date:
+            qs = qs.filter(date__lte=anchor_date)
+        latest = qs.order_by("-date").first()
+        if latest:
+            latest_by_metric[metric] = latest.date.isoformat()
+            latest_dates.append(latest.date)
+        else:
+            latest_by_metric[metric] = None
+
+    overall_latest = max(latest_dates) if latest_dates else None
+    return {
+        "latestByMetric": latest_by_metric,
+        "overallLatest": overall_latest.isoformat() if overall_latest else None,
+    }
+
+
 def _build_country_base_details(
     location: Location,
     metric: str,
@@ -607,7 +685,10 @@ def country_details(request, iso: str):
     series_values = [float(item["value"] or 0) for item in series]
     average = _round(sum(series_values) / len(series_values)) if series_values else None
     max_val = _round(max(series_values)) if series_values else None
-    snapshot = _build_country_snapshot(location, anchor_date=to_date if date_mode == "range" else target_date)
+    anchor_date = to_date if date_mode == "range" else target_date
+    snapshot = _build_country_snapshot(location, anchor_date=anchor_date)
+    daily_peaks = _build_country_daily_peaks(location, anchor_date=anchor_date)
+    coverage = _build_country_coverage(location, anchor_date=anchor_date)
 
     payload = {
         "iso3": iso_upper,
@@ -620,6 +701,9 @@ def country_details(request, iso: str):
         "from": from_date.isoformat() if from_date else from_param,
         "to": to_date.isoformat() if to_date else to_param,
         "date": target_date.isoformat() if target_date else date_param,
+        "totals": snapshot,
+        "dailyPeaks": daily_peaks,
+        "coverage": coverage,
         "snapshot": snapshot,
     }
     return Response(payload)

@@ -5,13 +5,15 @@ import {
   CountryDetailsResponse,
   Metric,
   ProvincesSummaryResponse,
+  SummaryMetric,
+  TodayMetric,
   SummaryDatum,
   SummaryResponse,
   TimeseriesPoint,
 } from '../types/map';
 
 export type MapSummaryParams = {
-  metric: Metric;
+  metric: SummaryMetric;
   date?: string;
   from?: string;
   to?: string;
@@ -75,6 +77,17 @@ export async function fetchSummary(params: MapSummaryParams): Promise<SummaryRes
       } satisfies SummaryResponse;
     }
 
+    if (isTodayMetric(params.metric)) {
+      const timeseries = await fetchTimeseries(params.metric);
+      const aggregated = aggregateTodayTimeseries(timeseries, { from, to, mode });
+      return {
+        data: aggregated,
+        metric: params.metric,
+        from,
+        to,
+      } satisfies SummaryResponse;
+    }
+
     const sourceMetric: Metric = params.metric === 'incidence' ? 'cases' : params.metric;
     const timeseries = await fetchTimeseries(sourceMetric);
     const aggregated = aggregateTimeseries(timeseries, { from, to, mode });
@@ -88,7 +101,7 @@ export async function fetchSummary(params: MapSummaryParams): Promise<SummaryRes
 }
 
 export async function fetchTimeseries(
-  metric: Metric,
+  metric: SummaryMetric,
   locationName?: string
 ): Promise<TimeseriesPoint[]> {
   const requestMetric = metric === 'incidence' ? 'cases' : metric;
@@ -96,6 +109,70 @@ export async function fetchTimeseries(
     params: { metric: requestMetric, location: locationName },
   });
   return data;
+}
+
+function isTodayMetric(metric: SummaryMetric): metric is TodayMetric {
+  return metric === 'today_cases' || metric === 'today_deaths' || metric === 'today_recovered';
+}
+
+function aggregateTodayTimeseries(
+  points: TimeseriesPoint[],
+  params: { from: string; to: string; mode: 'day' | 'range' }
+): SummaryDatum[] {
+  const fromDate = new Date(params.from);
+  const toDate = new Date(params.to);
+  const grouped = points.reduce<Record<string, TimeseriesPoint[]>>((acc, point) => {
+    const currentDate = new Date(point.date);
+    if (Number.isNaN(currentDate.getTime())) {
+      return acc;
+    }
+
+    if (params.mode === 'day') {
+      if (currentDate > toDate) {
+        return acc;
+      }
+    } else if (currentDate < fromDate || currentDate > toDate) {
+      return acc;
+    }
+
+    const iso = point.location.iso_code?.toUpperCase();
+    if (!iso) {
+      return acc;
+    }
+    if (!acc[iso]) {
+      acc[iso] = [];
+    }
+    acc[iso].push(point);
+    return acc;
+  }, {});
+
+  const rows = Object.entries(grouped)
+    .map<SummaryDatum | null>(([isoCode, series]) => {
+      const ordered = [...series].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      const values = ordered.map((item) => item.value ?? 0);
+      if (!values.length) {
+        return null;
+      }
+
+      const sum = values.reduce((acc, value) => acc + value, 0);
+      const value = params.mode === 'day' ? values[values.length - 1] : sum;
+      const average = Number((sum / values.length).toFixed(2));
+      const max = Number(Math.max(...values).toFixed(2));
+
+      return {
+        isoCode,
+        name: ordered[0]?.location.name,
+        value: Number(value.toFixed(2)),
+        delta: params.mode === 'range' ? Number(value.toFixed(2)) : undefined,
+        average,
+        max,
+      } satisfies SummaryDatum;
+    })
+    .filter((item): item is SummaryDatum => item !== null);
+
+  return rows.sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 }
 
 export async function fetchCountryChart(iso: string, metric: Metric): Promise<Blob> {

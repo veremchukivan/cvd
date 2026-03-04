@@ -3,7 +3,7 @@ import createPlotlyComponent from 'react-plotly.js/factory';
 import Plotly from 'plotly.js-basic-dist';
 import { useCountryDetails } from '../../hooks/useCountryDetails';
 import { useCountryProvinces } from '../../hooks/useCountryProvinces';
-import { CountryDetailsQuery, DateMode, DateRange, Metric } from '../../types/map';
+import { CountryDetailsQuery, DateMode, DateRange, Metric, SummaryMetric } from '../../types/map';
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -16,6 +16,23 @@ const metricLabels: Record<Metric, string> = {
   incidence: 'Incidence',
   mortality: 'Mortality',
 };
+
+const dailyPeakCards = [
+  { key: 'cases', metric: 'cases', label: 'Cases' },
+  { key: 'deaths', metric: 'deaths', label: 'Deaths' },
+  { key: 'recovered', metric: 'recovered', label: 'Recovered' },
+  { key: 'active', metric: 'active', label: 'Active' },
+] as const;
+
+const coverageRows = [
+  { key: 'cases', label: 'Cases (total)' },
+  { key: 'deaths', label: 'Deaths (total)' },
+  { key: 'recovered', label: 'Recovered (total)' },
+  { key: 'active', label: 'Active (total)' },
+  { key: 'today_cases', label: 'Cases (today)' },
+  { key: 'today_deaths', label: 'Deaths (today)' },
+  { key: 'today_recovered', label: 'Recovered (today)' },
+] as const;
 
 function formatMetricValue(metric: Metric, value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -44,12 +61,20 @@ function buildQuery(
   if (!resolvedIso) {
     return null;
   }
+  const metricForDetails = mapMetricToDetailsMetric(metric);
 
   if (dateMode === 'day') {
-    return { iso3: resolvedIso, metric, dateMode: 'day', date };
+    return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'day', date };
   }
 
-  return { iso3: resolvedIso, metric, dateMode: 'range', range };
+  return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'range', range };
+}
+
+function mapMetricToDetailsMetric(metric: Metric): SummaryMetric {
+  if (metric === 'cases') return 'today_cases';
+  if (metric === 'deaths') return 'today_deaths';
+  if (metric === 'recovered') return 'today_recovered';
+  return metric;
 }
 
 type TrendChartProps = {
@@ -69,29 +94,31 @@ const TrendChart: React.FC<TrendChartProps> = ({ title, metric, series, isLoadin
         {isLoading && <span className="pill pill-ghost">Loading…</span>}
       </div>
       {hasSeries ? (
-        <Plot
-          data={[
-            {
-              x: series?.map((point) => point.date),
-              y: series?.map((point) => point.value ?? null),
-              type: 'scatter',
-              mode: 'lines',
-              line: { color: '#4de0ff', width: 2 },
-            },
-          ]}
-          layout={{
-            height: 220,
-            margin: { l: 38, r: 8, t: 8, b: 32 },
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: { color: '#e2e8f0' },
-            xaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
-            yaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
-          }}
-          config={{ displayModeBar: false, responsive: true }}
-          useResizeHandler
-          style={{ width: '100%', height: '100%' }}
-        />
+        <div className="trend-plot-frame">
+          <Plot
+            data={[
+              {
+                x: series?.map((point) => point.date),
+                y: series?.map((point) => point.value ?? null),
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#4de0ff', width: 2 },
+              },
+            ]}
+            layout={{
+              height: 220,
+              margin: { l: 38, r: 8, t: 8, b: 32 },
+              paper_bgcolor: 'transparent',
+              plot_bgcolor: 'transparent',
+              font: { color: '#e2e8f0' },
+              xaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
+              yaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
+            }}
+            config={{ displayModeBar: false, responsive: true }}
+            useResizeHandler
+            style={{ width: '100%', height: '220px' }}
+          />
+        </div>
       ) : (
         <div className="chart-placeholder">No {metricLabels[metric].toLowerCase()} data</div>
       )}
@@ -124,13 +151,13 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
 }) => {
   const resolvedIso = iso3 ?? iso ?? null;
   const detailsQuery = buildQuery(resolvedIso, metric, dateMode, date, range);
+  const casesQuery = buildQuery(resolvedIso, 'cases', dateMode, date, range);
   const deathsQuery = buildQuery(resolvedIso, 'deaths', dateMode, date, range);
-  const recoveredQuery = buildQuery(resolvedIso, 'recovered', dateMode, date, range);
   const mortalityQuery = buildQuery(resolvedIso, 'mortality', dateMode, date, range);
 
   const details = useCountryDetails(detailsQuery);
+  const cases = useCountryDetails(casesQuery);
   const deaths = useCountryDetails(deathsQuery);
-  const recovered = useCountryDetails(recoveredQuery);
   const mortality = useCountryDetails(mortalityQuery);
 
   const seriesDateAnchor = dateMode === 'day' ? date : range.to;
@@ -146,15 +173,19 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
         <p className="panel-kicker">Country details</p>
         <h3 className="panel-title">Choose a country on the map</h3>
         <p className="panel-subtitle">
-          Click any country to jump here with mortality, recovery, trend charts, and provinces.
+          Click any country to jump here with totals, one-day peaks, trends, and provinces.
         </p>
       </aside>
     );
   }
 
-  const snapshot = details.data?.snapshot;
+  const totals = details.data?.totals || details.data?.snapshot;
+  const dailyPeaks = details.data?.dailyPeaks;
+  const coverage = details.data?.coverage;
   const provinceRows = (provinces.data || []).slice(0, 12);
-  const chartError = deaths.error || recovered.error || mortality.error;
+  const chartError = cases.error || deaths.error || mortality.error;
+  const showsDailyFlowInHeadline =
+    metric === 'cases' || metric === 'deaths' || metric === 'recovered' || metric === 'incidence';
 
   return (
     <aside className="country-panel" aria-label="Country details">
@@ -176,7 +207,7 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
           <p className="stat-label">
             {dateMode === 'day'
               ? 'Value on date'
-              : metric === 'incidence'
+              : showsDailyFlowInHeadline
                 ? 'New in period'
                 : 'Change in period'}
           </p>
@@ -195,43 +226,82 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
         </div>
       </div>
 
-      {snapshot ? (
+      {totals ? (
         <div className="chart-block">
           <div className="chart-header">
-            <p className="panel-kicker">Health snapshot</p>
+            <p className="panel-kicker">Totals</p>
+            {coverage?.overallLatest ? (
+              <span className="pill pill-ghost">Latest report: {coverage.overallLatest}</span>
+            ) : null}
           </div>
           <div className="panel-grid">
             <div className="stat-tile">
               <p className="stat-label">Cases</p>
-              <p className="stat-value">{formatMetricValue('cases', snapshot.cases)}</p>
+              <p className="stat-value">{formatMetricValue('cases', totals.cases)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Deaths</p>
-              <p className="stat-value">{formatMetricValue('deaths', snapshot.deaths)}</p>
+              <p className="stat-value">{formatMetricValue('deaths', totals.deaths)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Recovered</p>
-              <p className="stat-value">{formatMetricValue('recovered', snapshot.recovered)}</p>
+              <p className="stat-value">{formatMetricValue('recovered', totals.recovered)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Mortality</p>
-              <p className="stat-value">{formatMetricValue('mortality', snapshot.mortality)}</p>
+              <p className="stat-value">{formatMetricValue('mortality', totals.mortality)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Incidence (latest)</p>
-              <p className="stat-value">{formatMetricValue('incidence', snapshot.incidence)}</p>
+              <p className="stat-value">{formatMetricValue('incidence', totals.incidence)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Active</p>
-              <p className="stat-value">{formatMetricValue('active', snapshot.active)}</p>
+              <p className="stat-value">{formatMetricValue('active', totals.active)}</p>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {dailyPeaks ? (
+        <div className="chart-block">
+          <div className="chart-header">
+            <p className="panel-kicker">Peak in one day</p>
+          </div>
+          <div className="panel-grid">
+            {dailyPeakCards.map((card) => {
+              const peak = dailyPeaks[card.key];
+              return (
+                <div className="stat-tile" key={card.key}>
+                  <p className="stat-label">{card.label}</p>
+                  <p className="stat-value">{formatMetricValue(card.metric, peak?.value)}</p>
+                  <p className="stat-hint">{peak?.date || 'No daily peak'}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {coverage?.latestByMetric ? (
+        <div className="recent-table">
+          <div className="recent-header">
+            <p className="panel-kicker">Data coverage</p>
+          </div>
+          <div className="recent-rows">
+            {coverageRows.map((row) => (
+              <div className="recent-row" key={row.key}>
+                <span>{row.label}</span>
+                <span>{coverage.latestByMetric?.[row.key] || '—'}</span>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
 
       <div className="chart-block">
         <div className="chart-header">
-          <p className="panel-kicker">Mortality and recovery trends</p>
+          <p className="panel-kicker">Cases, deaths and mortality trends</p>
           {details.isLoading && <span className="pill pill-ghost">Loading…</span>}
         </div>
         {details.error && <div className="panel-error">{(details.error as Error).message}</div>}
@@ -240,16 +310,16 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
         ) : null}
         <div className="trend-chart-grid">
           <TrendChart
+            title="Cases (daily)"
+            metric="cases"
+            series={cases.data?.series}
+            isLoading={cases.isLoading}
+          />
+          <TrendChart
             title="Deaths"
             metric="deaths"
             series={deaths.data?.series}
             isLoading={deaths.isLoading}
-          />
-          <TrendChart
-            title="Recovered"
-            metric="recovered"
-            series={recovered.data?.series}
-            isLoading={recovered.isLoading}
           />
           <TrendChart
             title="Mortality (%)"

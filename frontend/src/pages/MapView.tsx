@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useRef } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import FilterBar from '../components/filters/FilterBar';
 import ChoroplethMap from '../components/map/ChoroplethMap';
@@ -6,6 +6,16 @@ import Legend from '../components/map/Legend';
 import CountryPanel from '../components/panels/CountryPanel';
 import { useMapSummary } from '../hooks/useMapSummary';
 import { DashboardProvider, useDashboard } from '../state/dashboard';
+
+const metricLabels = {
+  cases: 'Cases',
+  deaths: 'Deaths',
+  recovered: 'Recovered',
+  active: 'Active',
+  tests: 'Tests',
+  incidence: 'Incidence',
+  mortality: 'Mortality',
+} as const;
 
 const MapDashboardInner: React.FC = () => {
   const {
@@ -23,19 +33,6 @@ const MapDashboardInner: React.FC = () => {
   const mapQuery = buildMapQuery();
   const { valuesByIso3, maxValue, isLoading, isError } = useMapSummary(mapQuery);
   const detailsRef = useRef<HTMLElement | null>(null);
-
-  const casesMapQuery = useMemo(
-    () =>
-      state.dateMode === 'day'
-        ? { metric: 'cases' as const, dateMode: 'day' as const, date: state.date }
-        : {
-            metric: 'cases' as const,
-            dateMode: 'range' as const,
-            range: state.range,
-          },
-    [state.dateMode, state.date, state.range]
-  );
-  const { valuesByIso3: casesByIso3 } = useMapSummary(casesMapQuery);
 
   const handleCountrySelect = (iso: string, name?: string) => {
     selectCountry(iso, name);
@@ -62,7 +59,7 @@ const MapDashboardInner: React.FC = () => {
           <h1 className="title">COVID Atlas</h1>
           <p className="lede">
             Explore cases, deaths, and incidence with a single source of truth for state.
-            Pick a date or range, hover to see cases for that period, and click a country for deep details below.
+            Pick a date or range, hover to see the selected metric for that period, and click a country for deep details below.
           </p>
         </div>
         <div className="badge">API: {process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api/v1'}</div>
@@ -95,12 +92,12 @@ const MapDashboardInner: React.FC = () => {
                   : `${state.range.from} → ${state.range.to}`}
               </h2>
             </div>
-            <span className="pill pill-ghost">Hover for cases, click for full details</span>
+            <span className="pill pill-ghost">Hover for selected metric, click for full details</span>
           </div>
           <ChoroplethMap
             valuesByIso3={valuesByIso3}
-            hoverValuesByIso3={casesByIso3}
-            hoverMetricLabel="Cases"
+            hoverValuesByIso3={valuesByIso3}
+            hoverMetricLabel={metricLabels[state.metric]}
             maxValue={maxValue}
             selectedCountryIso3={state.selectedCountryIso3}
             loading={isLoading}
@@ -124,7 +121,7 @@ const MapDashboardInner: React.FC = () => {
       </section>
 
       <div className="footer-hint">
-        Data source: WHO + Johns Hopkins CSSE • Hover for cases • Click country to jump to the details panel
+        Data source: WHO + Johns Hopkins CSSE • Hover for selected metric • Click country to jump to the details panel
       </div>
     </div>
   );

@@ -281,12 +281,48 @@ def ingest_owid_backfill(
 
         affected_locations.add(iso_code)
 
+        population = _to_number(row.get("population"))
+        total_cases = _to_number(row.get("total_cases"))
+        if total_cases is None:
+            total_cases = _estimate_absolute_from_per_million(
+                per_million=row.get("total_cases_per_million"),
+                population=population,
+            )
+
+        total_deaths = _to_number(row.get("total_deaths"))
+        if total_deaths is None:
+            total_deaths = _estimate_absolute_from_per_million(
+                per_million=row.get("total_deaths_per_million"),
+                population=population,
+            )
+
+        total_tests = _to_number(row.get("total_tests"))
+        if total_tests is None:
+            total_tests = _estimate_absolute_from_per_thousand(
+                per_thousand=row.get("total_tests_per_thousand"),
+                population=population,
+            )
+
+        new_cases = _to_number(row.get("new_cases"))
+        if new_cases is None:
+            new_cases = _estimate_absolute_from_per_million(
+                per_million=row.get("new_cases_per_million"),
+                population=population,
+            )
+
+        new_deaths = _to_number(row.get("new_deaths"))
+        if new_deaths is None:
+            new_deaths = _estimate_absolute_from_per_million(
+                per_million=row.get("new_deaths_per_million"),
+                population=population,
+            )
+
         metric_values = {
-            "cases": _to_number(row.get("total_cases")),
-            "deaths": _to_number(row.get("total_deaths")),
-            "tests": _to_number(row.get("total_tests")),
-            "today_cases": _to_number(row.get("new_cases")),
-            "today_deaths": _to_number(row.get("new_deaths")),
+            "cases": total_cases,
+            "deaths": total_deaths,
+            "tests": total_tests,
+            "today_cases": new_cases,
+            "today_deaths": new_deaths,
         }
 
         for metric, value in metric_values.items():
@@ -317,6 +353,117 @@ def ingest_owid_backfill(
         to_date,
     )
     return len(affected_locations), upserted_points
+
+
+def ingest_per_million_cases_file(
+    file_path: str,
+    source: str = SOURCE_NAME,
+    overwrite: bool = True,
+) -> Tuple[int, int]:
+    """
+    Imports a CSV with columns:
+    Entity, Code, Day, New cases (per 1M)
+    and writes absolute values to today_cases using population from disease.sh /countries.
+    """
+    source_name = (source or SOURCE_NAME).strip() or SOURCE_NAME
+    population_by_iso = _build_live_population_lookup()
+    if not population_by_iso:
+        raise RuntimeError("Unable to build population lookup from disease.sh countries endpoint")
+
+    try:
+        handle = open(file_path, newline="", encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError(f"Unable to open CSV file: {file_path}") from exc
+
+    with handle:
+        reader = csv.DictReader(handle)
+        required_columns = {"Entity", "Code", "Day", "New cases (per 1M)"}
+        missing_columns = required_columns - set(reader.fieldnames or [])
+        if missing_columns:
+            raise RuntimeError(
+                f"CSV does not contain required columns: {', '.join(sorted(missing_columns))}"
+            )
+
+        location_cache: dict[str, Location] = {}
+        pending_records: list[DataPoint] = []
+        affected_locations: set[str] = set()
+        processed_points = 0
+
+        def flush_records() -> int:
+            if not pending_records:
+                return 0
+            count = len(pending_records)
+            if overwrite:
+                DataPoint.objects.bulk_create(
+                    pending_records,
+                    batch_size=5000,
+                    update_conflicts=True,
+                    unique_fields=["location", "date", "metric", "source"],
+                    update_fields=["value"],
+                )
+            else:
+                DataPoint.objects.bulk_create(
+                    pending_records,
+                    batch_size=5000,
+                    ignore_conflicts=True,
+                )
+            pending_records.clear()
+            return count
+
+        for row in reader:
+            iso_code = (row.get("Code") or "").strip().upper()[:10]
+            if not iso_code:
+                continue
+
+            point_date = _parse_iso_date(row.get("Day"))
+            if not point_date:
+                continue
+
+            population = population_by_iso.get(iso_code)
+            if population is None:
+                continue
+
+            today_cases = _estimate_absolute_from_per_million(
+                per_million=row.get("New cases (per 1M)"),
+                population=population,
+            )
+            if today_cases is None:
+                continue
+
+            location = location_cache.get(iso_code)
+            if location is None:
+                location = Location.objects.filter(iso_code=iso_code).first()
+                if location is None:
+                    location, _ = _upsert_location(
+                        iso_code=iso_code,
+                        name=(row.get("Entity") or iso_code).strip() or iso_code,
+                    )
+                location_cache[iso_code] = location
+
+            affected_locations.add(iso_code)
+            pending_records.append(
+                DataPoint(
+                    location=location,
+                    date=point_date,
+                    metric="today_cases",
+                    source=source_name,
+                    value=today_cases,
+                )
+            )
+
+            if len(pending_records) >= 10000:
+                processed_points += flush_records()
+
+        processed_points += flush_records()
+
+    log.info(
+        "Per-million cases import finished: %s locations affected, %s datapoints processed (source=%s, overwrite=%s)",
+        len(affected_locations),
+        processed_points,
+        source_name,
+        overwrite,
+    )
+    return len(affected_locations), processed_points
 
 
 def ingest_disease_states_data() -> Tuple[int, int]:
@@ -561,6 +708,22 @@ def _to_number(value: Any) -> float | None:
         return None
 
 
+def _estimate_absolute_from_per_million(per_million: Any, population: float | None) -> float | None:
+    per_million_num = _to_number(per_million)
+    if per_million_num is None or population is None or population <= 0:
+        return None
+    estimated = (per_million_num * population) / 1_000_000
+    return float(max(round(estimated), 0))
+
+
+def _estimate_absolute_from_per_thousand(per_thousand: Any, population: float | None) -> float | None:
+    per_thousand_num = _to_number(per_thousand)
+    if per_thousand_num is None or population is None or population <= 0:
+        return None
+    estimated = (per_thousand_num * population) / 1_000
+    return float(max(round(estimated), 0))
+
+
 def _append_today_deltas(date_bucket: Dict[date, Dict[str, float | int | None]]) -> None:
     for total_metric, today_metric in TODAY_METRIC_BY_TOTAL.items():
         previous_total: float | None = None
@@ -695,6 +858,25 @@ def _build_country_iso_lookup() -> dict[str, str]:
         if not iso:
             continue
         lookup[country_name.casefold()] = str(iso).upper()[:10]
+    return lookup
+
+
+def _build_live_population_lookup() -> dict[str, float]:
+    payload = _try_fetch_json(COUNTRIES_URL)
+    if not isinstance(payload, list):
+        return {}
+
+    lookup: dict[str, float] = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        iso = _resolve_iso_code(item)
+        if not iso:
+            continue
+        population = _to_number(item.get("population"))
+        if population is None or population <= 0:
+            continue
+        lookup[iso] = population
     return lookup
 
 

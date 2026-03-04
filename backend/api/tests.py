@@ -7,7 +7,11 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 
 from api.models import DataPoint, Location, Province, ProvinceDataPoint, State, StateDataPoint
-from api.services.ingest import _fetch_single_country_province_record
+from api.services.ingest import (
+    _estimate_absolute_from_per_million,
+    _estimate_absolute_from_per_thousand,
+    _fetch_single_country_province_record,
+)
 
 
 class SyncStatusEndpointTests(TestCase):
@@ -159,6 +163,57 @@ class OwidBackfillCommandTests(TestCase):
     def test_rejects_invalid_date(self):
         with self.assertRaises(CommandError):
             call_command("ingest_owid_backfill", "--from", "2023/03/10")
+
+
+class PerMillionCasesCommandTests(TestCase):
+    @patch("api.management.commands.ingest_per_million_cases.ingest_per_million_cases_file")
+    def test_runs_with_required_file(self, ingest_mock):
+        ingest_mock.return_value = (3, 77)
+        output = StringIO()
+
+        call_command(
+            "ingest_per_million_cases",
+            "--file",
+            "/tmp/per_million.csv",
+            stdout=output,
+        )
+
+        ingest_mock.assert_called_once_with(
+            file_path="/tmp/per_million.csv",
+            source="disease.sh",
+            overwrite=True,
+        )
+        self.assertIn("Per-million cases import updated: 3 affected locations, 77 records", output.getvalue())
+
+    @patch("api.management.commands.ingest_per_million_cases.ingest_per_million_cases_file")
+    def test_passes_no_overwrite_flag(self, ingest_mock):
+        ingest_mock.return_value = (1, 5)
+
+        call_command(
+            "ingest_per_million_cases",
+            "--file",
+            "/tmp/per_million.csv",
+            "--no-overwrite",
+        )
+
+        ingest_mock.assert_called_once_with(
+            file_path="/tmp/per_million.csv",
+            source="disease.sh",
+            overwrite=False,
+        )
+
+
+class OwidPerCapitaConversionTests(TestCase):
+    def test_converts_per_million_to_absolute(self):
+        value = _estimate_absolute_from_per_million(per_million=4.17, population=39_701_744)
+        self.assertEqual(value, 166.0)
+
+    def test_converts_per_thousand_to_absolute(self):
+        value = _estimate_absolute_from_per_thousand(per_thousand=1.25, population=1_000_000)
+        self.assertEqual(value, 1250.0)
+
+    def test_returns_none_when_population_missing(self):
+        self.assertIsNone(_estimate_absolute_from_per_million(per_million=10, population=None))
 
 
 class StateSyncStatusEndpointTests(TestCase):
@@ -332,3 +387,66 @@ class MapCasesDisplayLogicTests(TestCase):
         self.assertEqual(payload["metric"], "cases")
         self.assertEqual(payload["data"][0]["isoCode"], "UKR")
         self.assertEqual(payload["data"][0]["value"], 25.0)
+
+
+class CountryDetailsPanelPayloadTests(TestCase):
+    def setUp(self):
+        self.location = Location.objects.create(iso_code="USA", name="United States")
+        timeline_rows = [
+            (date(2023, 1, 1), "cases", 100),
+            (date(2023, 1, 2), "cases", 130),
+            (date(2023, 1, 3), "cases", 180),
+            (date(2023, 1, 1), "deaths", 10),
+            (date(2023, 1, 2), "deaths", 15),
+            (date(2023, 1, 3), "deaths", 18),
+            (date(2023, 1, 1), "recovered", 50),
+            (date(2023, 1, 2), "recovered", 80),
+            (date(2023, 1, 3), "recovered", 140),
+            (date(2023, 1, 1), "active", 40),
+            (date(2023, 1, 2), "active", 35),
+            (date(2023, 1, 3), "active", 22),
+            (date(2023, 1, 1), "tests", 1000),
+            (date(2023, 1, 2), "tests", 1200),
+            (date(2023, 1, 3), "tests", 1900),
+            (date(2023, 1, 2), "today_cases", 30),
+            (date(2023, 1, 3), "today_cases", 50),
+            (date(2023, 1, 2), "today_deaths", 5),
+            (date(2023, 1, 3), "today_deaths", 3),
+            (date(2023, 1, 2), "today_recovered", 30),
+            (date(2023, 1, 3), "today_recovered", 60),
+        ]
+        for point_date, metric, value in timeline_rows:
+            DataPoint.objects.create(
+                location=self.location,
+                date=point_date,
+                metric=metric,
+                value=value,
+                source="disease.sh",
+            )
+
+    def test_country_details_returns_totals_peaks_and_coverage(self):
+        response = self.client.get("/api/v1/country/USA/", {"metric": "cases", "date": "2023-01-03"})
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+
+        totals = payload["totals"]
+        self.assertEqual(totals["cases"], 180.0)
+        self.assertEqual(totals["deaths"], 18.0)
+        self.assertEqual(totals["recovered"], 140.0)
+        self.assertEqual(totals["active"], 22.0)
+        self.assertEqual(totals["tests"], 1900.0)
+        self.assertEqual(totals["incidence"], 50.0)
+        self.assertEqual(totals["mortality"], 10.0)
+
+        peaks = payload["dailyPeaks"]
+        self.assertEqual(peaks["cases"], {"value": 50.0, "date": "2023-01-03"})
+        self.assertEqual(peaks["deaths"], {"value": 5.0, "date": "2023-01-02"})
+        self.assertEqual(peaks["recovered"], {"value": 60.0, "date": "2023-01-03"})
+        self.assertEqual(peaks["tests"], {"value": 700.0, "date": "2023-01-03"})
+        self.assertEqual(peaks["active"], {"value": None, "date": None})
+
+        coverage = payload["coverage"]
+        self.assertEqual(coverage["overallLatest"], "2023-01-03")
+        self.assertEqual(coverage["latestByMetric"]["cases"], "2023-01-03")
+        self.assertEqual(coverage["latestByMetric"]["today_recovered"], "2023-01-03")

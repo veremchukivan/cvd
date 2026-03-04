@@ -2,6 +2,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from django.http import HttpResponse
+from django.db.models import Avg, Max, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -179,7 +181,167 @@ def _latest_points_before_by_iso(
     return latest
 
 
+def _build_rows_fast_day_snapshot(metric: str, to_date: date | None) -> list[dict]:
+    qs = DataPoint.objects.filter(metric=metric)
+    if to_date:
+        qs = qs.filter(date__lte=to_date)
+
+    grouped = qs.values(
+        "location_id",
+        "location__iso_code",
+        "location__name",
+    ).annotate(
+        average=Avg(Coalesce("value", Value(0.0))),
+        max_value=Max(Coalesce("value", Value(0.0))),
+    )
+    stats_by_location = {
+        row["location_id"]: {
+            "average": _round(row.get("average")) or 0,
+            "max": _round(row.get("max_value")) or 0,
+        }
+        for row in grouped
+    }
+
+    latest_points = qs.order_by("location_id", "-date", "-id").distinct("location_id").values(
+        "location_id",
+        "location__iso_code",
+        "location__name",
+        "value",
+    )
+
+    rows = []
+    for row in latest_points:
+        iso_code = (row.get("location__iso_code") or "").upper()
+        if not iso_code:
+            continue
+
+        stats = stats_by_location.get(row["location_id"]) or {}
+        value = _round(row.get("value")) or 0
+        rows.append(
+            {
+                "isoCode": iso_code,
+                "name": row.get("location__name") or iso_code,
+                "value": value,
+                "delta": None,
+                "average": stats.get("average", 0),
+                "max": stats.get("max", 0),
+            }
+        )
+
+    rows.sort(key=lambda item: item.get("value") or 0, reverse=True)
+    return rows
+
+
+def _build_rows_fast_range_sum(metric: str, from_date: date | None, to_date: date | None) -> list[dict]:
+    qs = DataPoint.objects.filter(metric=metric)
+    if from_date:
+        qs = qs.filter(date__gte=from_date)
+    if to_date:
+        qs = qs.filter(date__lte=to_date)
+
+    grouped = qs.values(
+        "location__iso_code",
+        "location__name",
+    ).annotate(
+        total=Coalesce(Sum(Coalesce("value", Value(0.0))), Value(0.0)),
+        average=Avg(Coalesce("value", Value(0.0))),
+        max_value=Max(Coalesce("value", Value(0.0))),
+    )
+
+    rows = []
+    for row in grouped:
+        iso_code = (row.get("location__iso_code") or "").upper()
+        if not iso_code:
+            continue
+
+        value = _round(row.get("total")) or 0
+        rows.append(
+            {
+                "isoCode": iso_code,
+                "name": row.get("location__name") or iso_code,
+                "value": value,
+                "delta": value,
+                "average": _round(row.get("average")) or 0,
+                "max": _round(row.get("max_value")) or 0,
+            }
+        )
+
+    rows.sort(key=lambda item: item.get("value") or 0, reverse=True)
+    return rows
+
+
+def _build_rows_fast_range_change(metric: str, from_date: date | None, to_date: date | None) -> list[dict]:
+    qs = DataPoint.objects.filter(metric=metric)
+    if from_date:
+        qs = qs.filter(date__gte=from_date)
+    if to_date:
+        qs = qs.filter(date__lte=to_date)
+
+    grouped = qs.values(
+        "location_id",
+        "location__iso_code",
+        "location__name",
+    ).annotate(
+        average=Avg(Coalesce("value", Value(0.0))),
+        max_value=Max(Coalesce("value", Value(0.0))),
+    )
+    stats_by_location = {
+        row["location_id"]: {
+            "isoCode": (row.get("location__iso_code") or "").upper(),
+            "name": row.get("location__name"),
+            "average": _round(row.get("average")) or 0,
+            "max": _round(row.get("max_value")) or 0,
+        }
+        for row in grouped
+    }
+    first_values = {
+        row["location_id"]: float(row.get("value") or 0)
+        for row in qs.order_by("location_id", "date", "-id").distinct("location_id").values(
+            "location_id",
+            "value",
+        )
+    }
+    last_values = {
+        row["location_id"]: float(row.get("value") or 0)
+        for row in qs.order_by("location_id", "-date", "-id").distinct("location_id").values(
+            "location_id",
+            "value",
+        )
+    }
+
+    rows = []
+    for location_id, stats in stats_by_location.items():
+        iso_code = stats.get("isoCode") or ""
+        if not iso_code:
+            continue
+
+        first = first_values.get(location_id, 0.0)
+        last = last_values.get(location_id, 0.0)
+        change = _round(last - first) or 0
+
+        rows.append(
+            {
+                "isoCode": iso_code,
+                "name": stats.get("name") or iso_code,
+                "value": change,
+                "delta": change,
+                "average": stats.get("average", 0),
+                "max": stats.get("max", 0),
+            }
+        )
+
+    rows.sort(key=lambda item: item.get("value") or 0, reverse=True)
+    return rows
+
+
 def _build_rows(metric: str, from_date: date | None, to_date: date | None, day_mode: bool) -> list[dict]:
+    if metric in (BASE_METRICS | TODAY_METRICS):
+        if day_mode:
+            return _build_rows_fast_day_snapshot(metric, to_date)
+        if metric in TODAY_METRICS:
+            return _build_rows_fast_range_sum(metric, from_date, to_date)
+        return _build_rows_fast_range_change(metric, from_date, to_date)
+
     if metric == "mortality":
         grouped, names = _query_grouped_mortality_points(from_date, to_date, day_mode)
         seed_points = (

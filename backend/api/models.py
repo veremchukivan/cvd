@@ -37,6 +37,10 @@ class DataPoint(models.Model):
     class Meta:
         unique_together = ("location", "date", "metric", "source")
         ordering = ["date"]
+        indexes = [
+            models.Index(fields=["metric", "date", "location"], name="dp_metric_date_loc_idx"),
+            models.Index(fields=["location", "metric", "date"], name="dp_loc_metric_date_idx"),
+        ]
 
     def __str__(self):
         return f"{self.location} - {self.metric} - {self.date}"

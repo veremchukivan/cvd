@@ -1,5 +1,6 @@
 import React from 'react';
 import { DateMode, DateRange, Metric } from '../../types/map';
+import DatePickerInput from './DatePickerInput';
 
 const metricOptions: { label: string; value: Metric }[] = [
   { label: 'Cases', value: 'cases' },
@@ -45,8 +46,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onReset,
 }) => {
   const handleRangeInput = (key: keyof DateRange) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const nextValue = e.target.value;
+    (nextValue: string) => {
       onRangeChange({ ...range, [key]: nextValue });
     };
 
@@ -92,13 +92,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       {dateMode === 'day' ? (
         <div className="filter-group">
           <label className="filter-label">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-            className="date-input"
-            aria-label="Date"
-          />
+          <DatePickerInput value={date} onChange={onDateChange} />
           <div className="mode-toggle" role="group" aria-label="Single day controls">
             <button type="button" className="pill pill-ghost" onClick={setToday}>
               Today
@@ -109,20 +103,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         <div className="filter-group range-group">
           <label className="filter-label">Date range</label>
           <div className="range-inputs">
-            <input
-              type="date"
+            <DatePickerInput
               value={range.from}
+              maxDate={range.to}
               onChange={handleRangeInput('from')}
-              className="date-input"
-              aria-label="From date"
             />
             <span className="dash">–</span>
-            <input
-              type="date"
+            <DatePickerInput
               value={range.to}
+              minDate={range.from}
               onChange={handleRangeInput('to')}
-              className="date-input"
-              aria-label="To date"
             />
           </div>
           <div className="mode-toggle" role="group" aria-label="Quick ranges">

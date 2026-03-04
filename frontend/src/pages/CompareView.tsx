@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { formatISO, startOfYear, subDays } from 'date-fns';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import Plotly from 'plotly.js-basic-dist';
 import { fetchCountryDetails, fetchSummary } from '../api/map';
+import DatePickerInput from '../components/filters/DatePickerInput';
 import {
   CountryDetailsQuery,
   CountryDetailsResponse,
@@ -27,6 +28,12 @@ const metricOptions: Array<{ value: Metric; label: string }> = [
   { value: 'incidence', label: 'Incidence' },
   { value: 'mortality', label: 'Mortality (%)' },
 ];
+
+function countryMatches(item: CountryOption, rawNeedle: string): boolean {
+  const needle = rawNeedle.trim().toLowerCase();
+  if (!needle) return true;
+  return item.name.toLowerCase().includes(needle) || item.iso3.toLowerCase().includes(needle);
+}
 
 function toSummaryMetric(metric: Metric): SummaryMetric {
   if (metric === 'cases') return 'today_cases';
@@ -173,11 +180,18 @@ const CompareView: React.FC = () => {
   });
   const [primaryIso, setPrimaryIso] = useState<string | null>(null);
   const [compareIso, setCompareIso] = useState<string | null>(null);
+  const [primarySearch, setPrimarySearch] = useState('');
+  const [compareSearch, setCompareSearch] = useState('');
+  const [primaryDropdownOpen, setPrimaryDropdownOpen] = useState(false);
+  const [compareDropdownOpen, setCompareDropdownOpen] = useState(false);
+  const primarySearchRef = useRef<HTMLDivElement | null>(null);
+  const compareSearchRef = useRef<HTMLDivElement | null>(null);
 
   const countryOptionsQuery = useQuery({
     queryKey: ['compare-country-options'],
     queryFn: async (): Promise<CountryOption[]> => {
-      const response = await fetchSummary({ metric: 'today_cases', date: today });
+      // Build stable country list independent from selected day.
+      const response = await fetchSummary({ metric: 'cases' });
       const uniq = new Map<string, string>();
       for (const row of response.data) {
         const iso = row.isoCode?.toUpperCase();
@@ -192,6 +206,18 @@ const CompareView: React.FC = () => {
   });
 
   const countryOptions = useMemo(() => countryOptionsQuery.data || [], [countryOptionsQuery.data]);
+  const primarySuggestions = useMemo(
+    () => countryOptions.filter((item) => countryMatches(item, primarySearch)),
+    [countryOptions, primarySearch]
+  );
+  const comparePool = useMemo(
+    () => countryOptions.filter((item) => item.iso3 !== primaryIso),
+    [countryOptions, primaryIso]
+  );
+  const compareSuggestions = useMemo(
+    () => comparePool.filter((item) => countryMatches(item, compareSearch)),
+    [comparePool, compareSearch]
+  );
 
   useEffect(() => {
     if (primaryIso || !countryOptions.length) return;
@@ -204,6 +230,38 @@ const CompareView: React.FC = () => {
       setCompareIso(null);
     }
   }, [compareIso, primaryIso]);
+
+  useEffect(() => {
+    if (!primaryIso) {
+      setPrimarySearch('');
+      return;
+    }
+    const selected = countryOptions.find((item) => item.iso3 === primaryIso);
+    if (selected) setPrimarySearch(selected.name);
+  }, [countryOptions, primaryIso]);
+
+  useEffect(() => {
+    if (!compareIso) {
+      setCompareSearch('');
+      return;
+    }
+    const selected = countryOptions.find((item) => item.iso3 === compareIso);
+    if (selected) setCompareSearch(selected.name);
+  }, [countryOptions, compareIso]);
+
+  useEffect(() => {
+    const onDocClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (primarySearchRef.current && !primarySearchRef.current.contains(target)) {
+        setPrimaryDropdownOpen(false);
+      }
+      if (compareSearchRef.current && !compareSearchRef.current.contains(target)) {
+        setCompareDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
   const summaryMetric = toSummaryMetric(metric);
   const primaryQuery = buildCountryQuery(primaryIso, summaryMetric, dateMode, date, range);
@@ -286,29 +344,22 @@ const CompareView: React.FC = () => {
         {dateMode === 'day' ? (
           <div className="filter-group">
             <label className="filter-label">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="date-input"
-            />
+            <DatePickerInput value={date} onChange={setDate} />
           </div>
         ) : (
           <div className="filter-group range-group">
             <label className="filter-label">Date range</label>
             <div className="range-inputs">
-              <input
-                type="date"
+              <DatePickerInput
                 value={range.from}
-                onChange={(event) => setRange((prev) => ({ ...prev, from: event.target.value }))}
-                className="date-input"
+                maxDate={range.to}
+                onChange={(nextIso) => setRange((prev) => ({ ...prev, from: nextIso }))}
               />
               <span className="dash">–</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={range.to}
-                onChange={(event) => setRange((prev) => ({ ...prev, to: event.target.value }))}
-                className="date-input"
+                minDate={range.from}
+                onChange={(nextIso) => setRange((prev) => ({ ...prev, to: nextIso }))}
               />
             </div>
             <div className="mode-toggle">
@@ -326,35 +377,141 @@ const CompareView: React.FC = () => {
         )}
         <div className="filter-group">
           <label className="filter-label">Primary country</label>
-          <select
-            value={primaryIso || ''}
-            onChange={(event) => setPrimaryIso(event.target.value || null)}
-            className="filter-select"
-          >
-            <option value="">Select country</option>
-            {countryOptions.map((item) => (
-              <option key={item.iso3} value={item.iso3}>
-                {item.name}
-              </option>
-            ))}
-          </select>
+          <div className="charts-country-searchbox" ref={primarySearchRef}>
+            <div className="charts-country-input-row">
+              <input
+                type="text"
+                value={primarySearch}
+                onChange={(event) => {
+                  setPrimarySearch(event.target.value);
+                  setPrimaryDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setPrimaryDropdownOpen(true);
+                  setCompareDropdownOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') return;
+                  if (!primarySuggestions.length) return;
+                  const first = primarySuggestions[0];
+                  setPrimaryIso(first.iso3);
+                  setPrimarySearch(first.name);
+                  setPrimaryDropdownOpen(false);
+                }}
+                className="charts-select"
+                placeholder="Search primary country..."
+              />
+              <button
+                type="button"
+                className="charts-country-toggle"
+                onClick={() => {
+                  setPrimaryDropdownOpen((current) => !current);
+                  setCompareDropdownOpen(false);
+                }}
+                aria-label="Toggle primary country list"
+              >
+                ▾
+              </button>
+            </div>
+            {primaryDropdownOpen ? (
+              <div className="charts-country-suggest-list" role="listbox">
+                {primarySuggestions.length ? (
+                  primarySuggestions.map((item) => (
+                    <button
+                      key={item.iso3}
+                      type="button"
+                      className={`charts-country-suggest-item ${primaryIso === item.iso3 ? 'charts-country-suggest-item-active' : ''}`}
+                      onClick={() => {
+                        setPrimaryIso(item.iso3);
+                        setPrimarySearch(item.name);
+                        setPrimaryDropdownOpen(false);
+                      }}
+                    >
+                      <span>{item.name}</span>
+                      <span className="charts-country-suggest-iso">{item.iso3}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="charts-country-suggest-empty">No countries found</p>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="filter-group">
           <label className="filter-label">Compare with</label>
-          <select
-            value={compareIso || ''}
-            onChange={(event) => setCompareIso(event.target.value || null)}
-            className="filter-select"
-          >
-            <option value="">None</option>
-            {countryOptions
-              .filter((item) => item.iso3 !== primaryIso)
-              .map((item) => (
-                <option key={item.iso3} value={item.iso3}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
+          <div className="charts-country-searchbox" ref={compareSearchRef}>
+            <div className="charts-country-input-row">
+              <input
+                type="text"
+                value={compareSearch}
+                onChange={(event) => {
+                  setCompareSearch(event.target.value);
+                  setCompareDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setCompareDropdownOpen(true);
+                  setPrimaryDropdownOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') return;
+                  if (!compareSuggestions.length) return;
+                  const first = compareSuggestions[0];
+                  setCompareIso(first.iso3);
+                  setCompareSearch(first.name);
+                  setCompareDropdownOpen(false);
+                }}
+                className="charts-select"
+                placeholder="Search second country..."
+              />
+              <button
+                type="button"
+                className="charts-country-toggle"
+                onClick={() => {
+                  setCompareDropdownOpen((current) => !current);
+                  setPrimaryDropdownOpen(false);
+                }}
+                aria-label="Toggle compare country list"
+              >
+                ▾
+              </button>
+            </div>
+            {compareDropdownOpen ? (
+              <div className="charts-country-suggest-list" role="listbox">
+                <button
+                  type="button"
+                  className={`charts-country-suggest-item ${compareIso ? '' : 'charts-country-suggest-item-active'}`}
+                  onClick={() => {
+                    setCompareIso(null);
+                    setCompareSearch('');
+                    setCompareDropdownOpen(false);
+                  }}
+                >
+                  <span>None</span>
+                  <span className="charts-country-suggest-iso">—</span>
+                </button>
+                {compareSuggestions.length ? (
+                  compareSuggestions.map((item) => (
+                    <button
+                      key={item.iso3}
+                      type="button"
+                      className={`charts-country-suggest-item ${compareIso === item.iso3 ? 'charts-country-suggest-item-active' : ''}`}
+                      onClick={() => {
+                        setCompareIso(item.iso3);
+                        setCompareSearch(item.name);
+                        setCompareDropdownOpen(false);
+                      }}
+                    >
+                      <span>{item.name}</span>
+                      <span className="charts-country-suggest-iso">{item.iso3}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="charts-country-suggest-empty">No countries found</p>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 

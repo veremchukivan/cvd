@@ -4,6 +4,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import Plotly from 'plotly.js-basic-dist';
 import { fetchCountryDetails, fetchSummary } from '../api/map';
+import DatePickerInput from '../components/filters/DatePickerInput';
 import { CountryDetailsQuery, CountryDetailsResponse, DateRange, Metric, SummaryMetric } from '../types/map';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -181,29 +182,22 @@ const WorldwideView: React.FC = () => {
         {dateMode === 'day' ? (
           <div className="filter-group">
             <label className="filter-label">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="date-input"
-            />
+            <DatePickerInput value={date} onChange={setDate} />
           </div>
         ) : (
           <div className="filter-group range-group">
             <label className="filter-label">Date range</label>
             <div className="range-inputs">
-              <input
-                type="date"
+              <DatePickerInput
                 value={range.from}
-                onChange={(event) => setRange((prev) => ({ ...prev, from: event.target.value }))}
-                className="date-input"
+                maxDate={range.to}
+                onChange={(nextIso) => setRange((prev) => ({ ...prev, from: nextIso }))}
               />
               <span className="dash">–</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={range.to}
-                onChange={(event) => setRange((prev) => ({ ...prev, to: event.target.value }))}
-                className="date-input"
+                minDate={range.from}
+                onChange={(nextIso) => setRange((prev) => ({ ...prev, to: nextIso }))}
               />
             </div>
             <div className="mode-toggle">

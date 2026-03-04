@@ -19,6 +19,10 @@ export const Legend: React.FC<LegendProps> = ({ maxValue, metricLabel }) => {
         <span>Low</span>
         <span>{maxValue ? `High (≈ ${Math.round(maxValue)})` : 'High'}</span>
       </div>
+      <div className="legend-no-data">
+        <span className="legend-no-data-swatch" aria-hidden />
+        <span>No data</span>
+      </div>
       <p className="legend-metric">{metricLabel}</p>
     </div>
   );

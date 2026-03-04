@@ -76,6 +76,10 @@ function resolveCountryName(geo: GeographyFeature, fallbackIso: string): string 
   return fallbackIso;
 }
 
+function hasOwnValue(source: ValuesByIso3, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
 export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
   valuesByIso3,
   hoverValuesByIso3 = {},
@@ -113,6 +117,16 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
   return (
     <div className="map-card" ref={cardRef}>
       <ComposableMap projectionConfig={{ scale: 170 }} className="map-canvas">
+        <defs>
+          <pattern id="map-no-data-hatch" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#131f34" />
+            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#4b5f79" strokeWidth="1.4" />
+          </pattern>
+          <pattern id="map-no-data-hatch-hover" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#1d2b46" />
+            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#86a0bf" strokeWidth="1.4" />
+          </pattern>
+        </defs>
         <ZoomableGroup
           center={viewport.center}
           zoom={viewport.zoom}
@@ -130,22 +144,44 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
               geographies.map((geo: GeographyFeature) => {
                 const iso = resolveIso3(geo);
                 const countryName = resolveCountryName(geo, iso);
-                const value = valuesByIso3[iso.toUpperCase()] ?? 0;
-                const hoverValue = hoverValuesByIso3[iso.toUpperCase()] ?? null;
+                const isoKey = iso.toUpperCase();
+                const hasData = hasOwnValue(valuesByIso3, isoKey);
+                const rawValue = hasData ? valuesByIso3[isoKey] : undefined;
+                const value = typeof rawValue === 'number' && Number.isFinite(rawValue) ? rawValue : 0;
+                const hoverValue = hasOwnValue(hoverValuesByIso3, isoKey)
+                  ? hoverValuesByIso3[isoKey]
+                  : null;
                 const isSelected = selectedCountryIso3?.toUpperCase() === iso.toUpperCase();
-                const fill = choroplethColor(value, maxValue);
+                const fill = hasData
+                  ? isSelected
+                    ? '#ffb703'
+                    : choroplethColor(value, maxValue)
+                  : 'url(#map-no-data-hatch)';
+                const hoverFill = hasData ? '#38bdf8' : 'url(#map-no-data-hatch-hover)';
 
                 return (
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
-                    fill={isSelected ? '#ffb703' : fill}
-                    stroke="#0b1224"
-                    strokeWidth={isSelected ? 1.1 : 0.6}
+                    fill={fill}
+                    stroke={isSelected ? '#ffb703' : '#0b1224'}
+                    strokeWidth={isSelected ? 1.2 : hasData ? 0.6 : 0.8}
                     style={{
-                      default: { outline: 'none' },
-                      hover: { fill: '#38bdf8', outline: 'none', cursor: 'pointer' },
-                      pressed: { fill: '#0ea5e9', outline: 'none' },
+                      default: {
+                        outline: 'none',
+                        strokeDasharray: hasData ? 'none' : '2.2 1.6',
+                      },
+                      hover: {
+                        fill: hoverFill,
+                        outline: 'none',
+                        cursor: 'pointer',
+                        strokeDasharray: hasData ? 'none' : '2.2 1.6',
+                      },
+                      pressed: {
+                        fill: hoverFill,
+                        outline: 'none',
+                        strokeDasharray: hasData ? 'none' : '2.2 1.6',
+                      },
                     }}
                     onClick={() => iso && onSelect(iso, countryName)}
                     onMouseEnter={(event) =>
@@ -171,7 +207,7 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
                     role="button"
                   >
                     <title>
-                      {countryName || iso}: {value?.toLocaleString('en-US') ?? '—'}
+                      {countryName || iso}: {hasData ? value.toLocaleString('en-US') : 'No data'}
                     </title>
                   </Geography>
                 );

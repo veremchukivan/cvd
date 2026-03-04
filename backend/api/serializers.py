@@ -1,8 +1,18 @@
 from rest_framework import serializers
-from .models import Location, DataPoint
+
+from .models import DataPoint, Location
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    continent = serializers.CharField(source="continent.name", read_only=True)
+
+    class Meta:
+        model = Location
+        fields = ["iso_code", "name", "continent"]
+
 
 class DataPointSerializer(serializers.ModelSerializer):
-    location = serializers.CharField(source="location.name")
+    location = LocationSerializer(read_only=True)
 
     class Meta:
         model = DataPoint

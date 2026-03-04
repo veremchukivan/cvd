@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from django.db.models import QuerySet
-
+        
 from api.models import DataPoint
 
 matplotlib.use("Agg")

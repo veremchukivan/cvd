@@ -11,6 +11,7 @@ const metricLabels: Record<Metric, string> = {
   cases: 'Cases',
   deaths: 'Deaths',
   recovered: 'Recovered',
+  vaccinations_total: 'Vaccinations',
   active: 'Active',
   tests: 'Tests',
   incidence: 'Incidence',
@@ -20,18 +21,20 @@ const metricLabels: Record<Metric, string> = {
 const dailyPeakCards = [
   { key: 'cases', metric: 'cases', label: 'Cases' },
   { key: 'deaths', metric: 'deaths', label: 'Deaths' },
-  { key: 'recovered', metric: 'recovered', label: 'Recovered' },
+  { key: 'vaccinations_total', metric: 'vaccinations_total', label: 'Vaccinations' },
   { key: 'active', metric: 'active', label: 'Active' },
 ] as const;
 
 const coverageRows = [
   { key: 'cases', label: 'Cases (total)' },
   { key: 'deaths', label: 'Deaths (total)' },
-  { key: 'recovered', label: 'Recovered (total)' },
+  { key: 'vaccinations_total', label: 'Vaccinations (total)' },
+  { key: 'people_vaccinated', label: 'People vaccinated' },
+  { key: 'people_fully_vaccinated', label: 'Fully vaccinated' },
   { key: 'active', label: 'Active (total)' },
   { key: 'today_cases', label: 'Cases (today)' },
   { key: 'today_deaths', label: 'Deaths (today)' },
-  { key: 'today_recovered', label: 'Recovered (today)' },
+  { key: 'today_vaccinations', label: 'Vaccinations (today)' },
 ] as const;
 
 function formatMetricValue(metric: Metric, value: number | null | undefined): string {
@@ -44,7 +47,7 @@ function formatMetricValue(metric: Metric, value: number | null | undefined): st
 
 function formatHeadline(metric: Metric, dateMode: DateMode, value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
-  if (metric === 'mortality' && dateMode === 'range') {
+  if (metric === 'mortality' && dateMode !== 'day') {
     const prefix = value > 0 ? '+' : '';
     return `${prefix}${value.toFixed(2)} pp`;
   }
@@ -66,14 +69,17 @@ function buildQuery(
   if (dateMode === 'day') {
     return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'day', date };
   }
-
-  return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'range', range };
+  if (dateMode === 'range') {
+    return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'range', range };
+  }
+  return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'total' };
 }
 
 function mapMetricToDetailsMetric(metric: Metric): SummaryMetric {
   if (metric === 'cases') return 'today_cases';
   if (metric === 'deaths') return 'today_deaths';
   if (metric === 'recovered') return 'today_recovered';
+  if (metric === 'vaccinations_total') return 'today_vaccinations';
   return metric;
 }
 
@@ -160,7 +166,10 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
   const deaths = useCountryDetails(deathsQuery);
   const mortality = useCountryDetails(mortalityQuery);
 
-  const seriesDateAnchor = dateMode === 'day' ? date : range.to;
+  const seriesDateAnchor = dateMode === 'day' ? date : dateMode === 'range' ? range.to : undefined;
+  const periodLabel =
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
+  const periodHint = dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} to ${range.to}` : 'All time';
   const provinces = useCountryProvinces({
     iso3: resolvedIso,
     countryName: details.data?.name || countryName,
@@ -185,7 +194,10 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
   const provinceRows = (provinces.data || []).slice(0, 12);
   const chartError = cases.error || deaths.error || mortality.error;
   const showsDailyFlowInHeadline =
-    metric === 'cases' || metric === 'deaths' || metric === 'recovered' || metric === 'incidence';
+    metric === 'cases' ||
+    metric === 'deaths' ||
+    metric === 'vaccinations_total' ||
+    metric === 'incidence';
 
   return (
     <aside className="country-panel" aria-label="Country details">
@@ -194,7 +206,7 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
           <p className="panel-kicker">Selected country</p>
           <h3 className="panel-title">{details.data?.name || countryName || resolvedIso}</h3>
           <p className="panel-subtitle">
-            {metricLabels[metric]} • {dateMode === 'day' ? date : `${range.from} → ${range.to}`}
+            {metricLabels[metric]} • {periodLabel}
           </p>
         </div>
         <button className="pill pill-ghost" onClick={onClose} type="button">
@@ -212,7 +224,7 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
                 : 'Change in period'}
           </p>
           <p className="stat-value">{formatHeadline(metric, dateMode, details.data?.headline)}</p>
-          <p className="stat-hint">{dateMode === 'day' ? date : `${range.from} to ${range.to}`}</p>
+          <p className="stat-hint">{periodHint}</p>
         </div>
         <div className="stat-tile">
           <p className="stat-label">Average</p>
@@ -244,8 +256,12 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
               <p className="stat-value">{formatMetricValue('deaths', totals.deaths)}</p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Recovered</p>
-              <p className="stat-value">{formatMetricValue('recovered', totals.recovered)}</p>
+              <p className="stat-label">Vaccinations</p>
+              <p className="stat-value">{formatMetricValue('vaccinations_total', totals.vaccinations_total)}</p>
+            </div>
+            <div className="stat-tile">
+              <p className="stat-label">Fully vaccinated</p>
+              <p className="stat-value">{formatMetricValue('vaccinations_total', totals.people_fully_vaccinated)}</p>
             </div>
             <div className="stat-tile">
               <p className="stat-label">Mortality</p>

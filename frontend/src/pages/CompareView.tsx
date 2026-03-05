@@ -12,22 +12,14 @@ import {
   metricToSummaryMetric,
   quickRangeBounds,
 } from '../lib/analytics';
+import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
 import { CountryOption } from '../types/country';
-import { CountryDetailsResponse, DateRange, Metric } from '../types/map';
-
-const metricOptions: Array<{ value: Metric; label: string }> = [
-  { value: 'cases', label: 'Cases (daily)' },
-  { value: 'deaths', label: 'Deaths (daily)' },
-  { value: 'recovered', label: 'Recovered (daily)' },
-  { value: 'active', label: 'Active' },
-  { value: 'incidence', label: 'Incidence' },
-  { value: 'mortality', label: 'Mortality (%)' },
-];
+import { CountryDetailsResponse, DateMode, DateRange, Metric, SummaryMetric } from '../types/map';
 
 const CompareView: React.FC = () => {
   const today = formatISO(new Date(), { representation: 'date' });
   const [metric, setMetric] = useState<Metric>('cases');
-  const [dateMode, setDateMode] = useState<'day' | 'range'>('day');
+  const [dateMode, setDateMode] = useState<DateMode>('day');
   const [date, setDate] = useState(today);
   const [range, setRange] = useState<DateRange>({
     from: formatISO(subDays(new Date(), 13), { representation: 'date' }),
@@ -41,6 +33,7 @@ const CompareView: React.FC = () => {
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false);
   const primarySearchRef = useRef<HTMLDivElement | null>(null);
   const compareSearchRef = useRef<HTMLDivElement | null>(null);
+  const metricOptions = useMemo(() => metricOptionsForDateMode(dateMode), [dateMode]);
 
   const countryOptionsQuery = useQuery({
     queryKey: ['compare-country-options'],
@@ -82,6 +75,16 @@ const CompareView: React.FC = () => {
       setCompareIso(null);
     }
   }, [compareIso, primaryIso]);
+
+  useEffect(() => {
+    if (isMetricAllowedForDateMode(metric, dateMode)) {
+      return;
+    }
+    const fallback = metricOptions[0]?.value;
+    if (fallback) {
+      setMetric(fallback);
+    }
+  }, [dateMode, metric, metricOptions]);
 
   useEffect(() => {
     if (!primaryIso) {
@@ -136,6 +139,29 @@ const CompareView: React.FC = () => {
   const mainLoading = mainComparison.some((item) => item.isLoading);
   const mainError = mainComparison.find((item) => item.error)?.error as Error | undefined;
 
+  const extraMetricQueries = useQueries({
+    queries: ([
+      maybeBuildCountryQuery(primaryIso, 'today_vaccinations' as SummaryMetric, dateMode, date, range),
+      maybeBuildCountryQuery(compareIso, 'today_vaccinations' as SummaryMetric, dateMode, date, range),
+      maybeBuildCountryQuery(primaryIso, 'mortality' as SummaryMetric, dateMode, date, range),
+      maybeBuildCountryQuery(compareIso, 'mortality' as SummaryMetric, dateMode, date, range),
+    ] as const).map((query) => ({
+      queryKey: ['compare-extra', query],
+      queryFn: () => {
+        if (!query) throw new Error('Missing comparison query');
+        return fetchCountryDetails(query);
+      },
+      enabled: Boolean(query),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+
+  const primaryVaccinations = extraMetricQueries[0]?.data as CountryDetailsResponse | undefined;
+  const compareVaccinations = extraMetricQueries[1]?.data as CountryDetailsResponse | undefined;
+  const primaryMortality = extraMetricQueries[2]?.data as CountryDetailsResponse | undefined;
+  const compareMortality = extraMetricQueries[3]?.data as CountryDetailsResponse | undefined;
+  const extraLoading = extraMetricQueries.some((item) => item.isLoading);
+
   const primaryName = useMemo(
     () => countryOptions.find((item) => item.iso3 === primaryIso)?.name || primaryIso || 'Primary country',
     [countryOptions, primaryIso]
@@ -145,7 +171,8 @@ const CompareView: React.FC = () => {
     [countryOptions, compareIso]
   );
 
-  const periodLabel = dateMode === 'day' ? date : `${range.from} → ${range.to}`;
+  const periodLabel =
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
 
   return (
     <div className="page compare-page">
@@ -154,7 +181,7 @@ const CompareView: React.FC = () => {
           <p className="eyebrow">Country comparison</p>
           <h1 className="title">Compare Countries</h1>
           <p className="lede">
-            Compare two countries for a selected day or period with one shared trend chart.
+            Compare two countries for a selected day or period with trend, gap, ratio, normalized index and share charts.
           </p>
         </div>
       </header>
@@ -229,9 +256,13 @@ const CompareView: React.FC = () => {
         metric={summaryMetric}
         primary={primaryDetails}
         secondary={compareDetails}
+        primaryVaccinations={primaryVaccinations}
+        secondaryVaccinations={compareVaccinations}
+        primaryMortality={primaryMortality}
+        secondaryMortality={compareMortality}
         primaryName={primaryName}
         secondaryName={compareName}
-        loading={mainLoading}
+        loading={mainLoading || extraLoading}
       />
     </div>
   );

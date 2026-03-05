@@ -16,14 +16,14 @@ import ChartsMetricCardsSection from '../components/charts/ChartsMetricCardsSect
 import ChartsOverviewSection from '../components/charts/ChartsOverviewSection';
 import { countryMatches, maybeBuildCountryQuery, quickRangeBounds } from '../lib/analytics';
 import { CountryOption } from '../types/country';
-import { CountryDetailsResponse, DateRange, SummaryMetric } from '../types/map';
+import { CountryDetailsResponse, DateMode, DateRange, SummaryMetric } from '../types/map';
 
 const chartMetricCards: Array<{ metric: SummaryMetric; label: string }> = [
   { metric: 'today_cases', label: 'Cases (daily)' },
   { metric: 'today_deaths', label: 'Deaths (daily)' },
-  { metric: 'today_recovered', label: 'Recovered (daily)' },
+  { metric: 'today_vaccinations', label: 'Vaccinations (daily)' },
   { metric: 'active', label: 'Active (total)' },
-  { metric: 'incidence', label: 'Incidence' },
+  { metric: 'vaccinations_total', label: 'Vaccinations (total)' },
   { metric: 'mortality', label: 'Mortality (%)' },
 ];
 
@@ -77,7 +77,7 @@ function findPeak(series: Array<{ date: string; value: number | null }> | undefi
 
 const ChartsView: React.FC = () => {
   const today = formatISO(new Date(), { representation: 'date' });
-  const [dateMode, setDateMode] = useState<'day' | 'range'>('day');
+  const [dateMode, setDateMode] = useState<DateMode>('day');
   const [date, setDate] = useState(today);
   const [range, setRange] = useState<DateRange>({
     from: formatISO(subDays(new Date(), 13), { representation: 'date' }),
@@ -148,7 +148,8 @@ const ChartsView: React.FC = () => {
     () => countryOptions.find((item) => item.iso3 === countryIso)?.name || countryIso || 'Country',
     [countryOptions, countryIso]
   );
-  const periodLabel = dateMode === 'day' ? date : `${range.from} → ${range.to}`;
+  const periodLabel =
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
 
   const metricData = chartMetricCards.reduce<Partial<Record<SummaryMetric, CountryDetailsResponse>>>(
     (acc, item, index) => {
@@ -163,9 +164,9 @@ const ChartsView: React.FC = () => {
 
   const casesSeries = useMemo(() => metricData.today_cases?.series ?? [], [metricData.today_cases?.series]);
   const deathsSeries = useMemo(() => metricData.today_deaths?.series ?? [], [metricData.today_deaths?.series]);
-  const recoveredSeries = useMemo(
-    () => metricData.today_recovered?.series ?? [],
-    [metricData.today_recovered?.series]
+  const vaccinationsSeries = useMemo(
+    () => metricData.today_vaccinations?.series ?? [],
+    [metricData.today_vaccinations?.series]
   );
   const mortalitySeries = useMemo(() => metricData.mortality?.series ?? [], [metricData.mortality?.series]);
 
@@ -193,18 +194,18 @@ const ChartsView: React.FC = () => {
         line: { color: '#ff8a47', width: 2.2 },
       });
     }
-    if (recoveredSeries.length) {
+    if (vaccinationsSeries.length) {
       traces.push({
-        x: recoveredSeries.map((point) => point.date),
-        y: recoveredSeries.map((point) => toNumeric(point.value)),
+        x: vaccinationsSeries.map((point) => point.date),
+        y: vaccinationsSeries.map((point) => toNumeric(point.value)),
         type: 'scatter',
         mode: 'lines',
-        name: 'Recovered',
+        name: 'Vaccinations',
         line: { color: '#80ed99', width: 2.2, dash: 'dot' },
       });
     }
     return traces;
-  }, [casesSeries, deathsSeries, recoveredSeries]);
+  }, [casesSeries, deathsSeries, vaccinationsSeries]);
 
   const momentumSeries = useMemo((): MomentumPoint[] => {
     const source = casesSeries.slice(-60);
@@ -251,9 +252,9 @@ const ChartsView: React.FC = () => {
         color: '#ff8a47',
       },
       {
-        label: 'Recovered',
-        metric: 'today_recovered',
-        value: toNumeric(metricData.today_recovered?.headline) || 0,
+        label: 'Vaccinations',
+        metric: 'today_vaccinations',
+        value: toNumeric(metricData.today_vaccinations?.headline) || 0,
         color: '#80ed99',
       },
     ];
@@ -261,7 +262,7 @@ const ChartsView: React.FC = () => {
   }, [
     metricData.today_cases?.headline,
     metricData.today_deaths?.headline,
-    metricData.today_recovered?.headline,
+    metricData.today_vaccinations?.headline,
   ]);
 
   const splitTotal = useMemo(() => splitData.reduce((acc, item) => acc + item.value, 0), [splitData]);
@@ -286,7 +287,7 @@ const ChartsView: React.FC = () => {
     const metricValues = {
       cases: toNumeric(metricData.today_cases?.headline) || 0,
       deaths: toNumeric(metricData.today_deaths?.headline) || 0,
-      recovered: toNumeric(metricData.today_recovered?.headline) || 0,
+      vaccinations: toNumeric(metricData.today_vaccinations?.headline) || 0,
     };
 
     const pairs: Array<Omit<PairComparison, 'leftPercent' | 'rightPercent'>> = [
@@ -307,8 +308,8 @@ const ChartsView: React.FC = () => {
         },
       },
       {
-        key: 'cases-recovered',
-        title: 'Cases vs Recovered',
+        key: 'cases-vaccinations',
+        title: 'Cases vs Vaccinations',
         left: {
           label: 'Cases',
           metric: 'today_cases',
@@ -316,19 +317,19 @@ const ChartsView: React.FC = () => {
           color: '#4de0ff',
         },
         right: {
-          label: 'Recovered',
-          metric: 'today_recovered',
-          value: metricValues.recovered,
+          label: 'Vaccinations',
+          metric: 'today_vaccinations',
+          value: metricValues.vaccinations,
           color: '#80ed99',
         },
       },
       {
-        key: 'recovered-deaths',
-        title: 'Recovered vs Deaths',
+        key: 'vaccinations-deaths',
+        title: 'Vaccinations vs Deaths',
         left: {
-          label: 'Recovered',
-          metric: 'today_recovered',
-          value: metricValues.recovered,
+          label: 'Vaccinations',
+          metric: 'today_vaccinations',
+          value: metricValues.vaccinations,
           color: '#80ed99',
         },
         right: {
@@ -358,7 +359,7 @@ const ChartsView: React.FC = () => {
   }, [
     metricData.today_cases?.headline,
     metricData.today_deaths?.headline,
-    metricData.today_recovered?.headline,
+    metricData.today_vaccinations?.headline,
     outcomePairKey,
   ]);
 

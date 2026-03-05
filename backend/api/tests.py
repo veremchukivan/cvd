@@ -8,6 +8,7 @@ from django.test import TestCase
 
 from api.models import DataPoint, Location, Province, ProvinceDataPoint, State, StateDataPoint
 from api.services.ingest import (
+    _estimate_absolute_from_per_hundred,
     _estimate_absolute_from_per_million,
     _estimate_absolute_from_per_thousand,
     _fetch_single_country_province_record,
@@ -266,6 +267,10 @@ class OwidPerCapitaConversionTests(TestCase):
         value = _estimate_absolute_from_per_thousand(per_thousand=1.25, population=1_000_000)
         self.assertEqual(value, 1250.0)
 
+    def test_converts_per_hundred_to_absolute(self):
+        value = _estimate_absolute_from_per_hundred(per_hundred=75, population=2_000_000)
+        self.assertEqual(value, 1_500_000.0)
+
     def test_returns_none_when_population_missing(self):
         self.assertIsNone(_estimate_absolute_from_per_million(per_million=10, population=None))
 
@@ -504,3 +509,57 @@ class CountryDetailsPanelPayloadTests(TestCase):
         self.assertEqual(coverage["overallLatest"], "2023-01-03")
         self.assertEqual(coverage["latestByMetric"]["cases"], "2023-01-03")
         self.assertEqual(coverage["latestByMetric"]["today_recovered"], "2023-01-03")
+
+
+class VaccinationMetricsEndpointTests(TestCase):
+    def setUp(self):
+        self.location = Location.objects.create(iso_code="UKR", name="Ukraine")
+        timeline_rows = [
+            (date(2023, 1, 1), "vaccinations_total", 100.0),
+            (date(2023, 1, 2), "vaccinations_total", 170.0),
+            (date(2023, 1, 1), "today_vaccinations", 40.0),
+            (date(2023, 1, 2), "today_vaccinations", 70.0),
+            (date(2023, 1, 2), "today_vaccinations_smoothed", 55.0),
+        ]
+        for point_date, metric, value in timeline_rows:
+            DataPoint.objects.create(
+                location=self.location,
+                date=point_date,
+                metric=metric,
+                value=value,
+                source="disease.sh",
+            )
+
+    def test_map_summary_supports_vaccination_total_metric(self):
+        response = self.client.get(
+            "/api/v1/map/",
+            {"metric": "vaccinations_total", "from": "2023-01-01", "to": "2023-01-02"},
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["metric"], "vaccinations_total")
+        self.assertEqual(payload["data"][0]["isoCode"], "UKR")
+        self.assertEqual(payload["data"][0]["value"], 70.0)
+
+    def test_country_details_supports_vaccination_alias_metric(self):
+        response = self.client.get(
+            "/api/v1/country/UKR/",
+            {"metric": "total_vaccinations", "from": "2023-01-01", "to": "2023-01-02"},
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["metric"], "vaccinations_total")
+        self.assertEqual(payload["headline"], 70.0)
+
+    def test_country_details_supports_today_vaccinations_metric(self):
+        response = self.client.get(
+            "/api/v1/country/UKR/",
+            {"metric": "today_vaccinations", "from": "2023-01-01", "to": "2023-01-02"},
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["metric"], "today_vaccinations")
+        self.assertEqual(payload["headline"], 110.0)

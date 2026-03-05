@@ -1,16 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DateMode, DateRange, Metric } from '../../types/map';
 import DatePickerInput from './DatePickerInput';
-
-const metricOptions: { label: string; value: Metric }[] = [
-  { label: 'Cases', value: 'cases' },
-  { label: 'Deaths', value: 'deaths' },
-  { label: 'Recovered', value: 'recovered' },
-  { label: 'Active', value: 'active' },
-  { label: 'Tests', value: 'tests' },
-  { label: 'Incidence (daily new)', value: 'incidence' },
-  { label: 'Mortality (%)', value: 'mortality' },
-];
+import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../../lib/metricOptions';
 
 type QuickLabel = '7d' | '30d' | 'ytd';
 
@@ -45,6 +36,18 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onQuickRange,
   onReset,
 }) => {
+  const metricOptions = metricOptionsForDateMode(dateMode);
+
+  useEffect(() => {
+    if (isMetricAllowedForDateMode(metric, dateMode)) {
+      return;
+    }
+    const fallback = metricOptions[0]?.value;
+    if (fallback) {
+      onMetricChange(fallback);
+    }
+  }, [dateMode, metric, metricOptions, onMetricChange]);
+
   const handleRangeInput = (key: keyof DateRange) =>
     (nextValue: string) => {
       onRangeChange({ ...range, [key]: nextValue });
@@ -76,14 +79,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <div className="filter-group">
         <label className="filter-label">View mode</label>
         <div className="mode-toggle" role="group" aria-label="Date mode">
-          {(['day', 'range'] as DateMode[]).map((mode) => (
+          {(['day', 'range', 'total'] as DateMode[]).map((mode) => (
             <button
               key={mode}
               className={`pill ${dateMode === mode ? 'pill-active' : ''}`}
               onClick={() => onDateModeChange(mode)}
               type="button"
             >
-              {mode === 'day' ? 'Single day' : 'Period'}
+              {mode === 'day' ? 'Single day' : mode === 'range' ? 'Period' : 'Total'}
             </button>
           ))}
         </div>
@@ -99,7 +102,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </button>
           </div>
         </div>
-      ) : (
+      ) : dateMode === 'range' ? (
         <div className="filter-group range-group">
           <label className="filter-label">Date range</label>
           <div className="range-inputs">
@@ -126,6 +129,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 {btn.label}
               </button>
             ))}
+          </div>
+        </div>
+      ) : (
+        <div className="filter-group">
+          <label className="filter-label">Date range</label>
+          <div className="mode-toggle" role="note" aria-label="Total mode">
+            <span className="pill pill-ghost">All-time aggregate (without dates)</span>
           </div>
         </div>
       )}

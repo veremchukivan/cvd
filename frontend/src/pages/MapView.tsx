@@ -11,6 +11,7 @@ const metricLabels = {
   cases: 'Cases',
   deaths: 'Deaths',
   recovered: 'Recovered',
+  vaccinations_total: 'Vaccinations',
   active: 'Active',
   tests: 'Tests',
   incidence: 'Incidence',
@@ -58,7 +59,7 @@ const MapDashboardInner: React.FC = () => {
           <p className="eyebrow">COVID explorer</p>
           <h1 className="title">COVID Atlas</h1>
           <p className="lede">
-            Explore cases, deaths, and incidence with a single source of truth for state.
+            Explore daily and period-based COVID metrics with a single source of truth for state.
             Pick a date or range, hover to see the selected metric for that period, and click a country for deep details below.
           </p>
         </div>
@@ -89,7 +90,9 @@ const MapDashboardInner: React.FC = () => {
                 {state.metric} •{' '}
                 {state.dateMode === 'day'
                   ? state.date
-                  : `${state.range.from} → ${state.range.to}`}
+                  : state.dateMode === 'range'
+                    ? `${state.range.from} → ${state.range.to}`
+                    : 'All time'}
               </h2>
             </div>
             <span className="pill pill-ghost">Hover for selected metric, click for full details</span>
@@ -103,7 +106,7 @@ const MapDashboardInner: React.FC = () => {
             loading={isLoading}
             onSelect={handleCountrySelect}
           />
-          <Legend maxValue={maxValue} metricLabel={`Value for ${state.metric}`} />
+          <Legend maxValue={maxValue} metricLabel={`${metricLabels[state.metric]} scale`} />
         </div>
       </div>
       <section id="country-details" className="details-section" ref={detailsRef}>

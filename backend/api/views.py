@@ -12,8 +12,24 @@ from .serializers import DataPointSerializer
 from .services.analytics import ChartGenerationError, build_metric_chart_png
 from .services.ingest import get_ingest_status, get_province_ingest_status, get_state_ingest_status
 
-BASE_METRICS = {"cases", "deaths", "recovered", "active", "tests"}
-TODAY_METRICS = {"today_cases", "today_deaths", "today_recovered"}
+BASE_METRICS = {
+    "cases",
+    "deaths",
+    "recovered",
+    "active",
+    "tests",
+    "vaccinations_total",
+    "people_vaccinated",
+    "people_fully_vaccinated",
+    "boosters_total",
+}
+TODAY_METRICS = {
+    "today_cases",
+    "today_deaths",
+    "today_recovered",
+    "today_vaccinations",
+    "today_vaccinations_smoothed",
+}
 DERIVED_METRICS = {"incidence", "mortality"}
 SUPPORTED_METRICS = BASE_METRICS | TODAY_METRICS | DERIVED_METRICS
 SNAPSHOT_METRICS = (
@@ -22,15 +38,25 @@ SNAPSHOT_METRICS = (
     "recovered",
     "active",
     "tests",
+    "vaccinations_total",
+    "people_vaccinated",
+    "people_fully_vaccinated",
+    "boosters_total",
     "today_cases",
     "today_deaths",
     "today_recovered",
+    "today_vaccinations",
+    "today_vaccinations_smoothed",
 )
-PEAK_TOTAL_METRICS = ("cases", "deaths", "recovered", "active", "tests")
+PEAK_TOTAL_METRICS = ("cases", "deaths", "vaccinations_total", "active", "tests")
 TODAY_METRIC_BY_TOTAL = {
     "cases": "today_cases",
     "deaths": "today_deaths",
     "recovered": "today_recovered",
+    "vaccinations_total": "today_vaccinations",
+    "people_vaccinated": "today_vaccinations",
+    "people_fully_vaccinated": "today_vaccinations",
+    "boosters_total": "today_vaccinations",
 }
 
 
@@ -58,6 +84,9 @@ def _normalize_metric(metric: str | None) -> str:
         "todaycases": "today_cases",
         "todaydeaths": "today_deaths",
         "todayrecovered": "today_recovered",
+        "total_vaccinations": "vaccinations_total",
+        "todayvaccinations": "today_vaccinations",
+        "new_vaccinations": "today_vaccinations",
     }
     normalized = aliases.get(normalized, normalized)
     return normalized if normalized in SUPPORTED_METRICS else "cases"

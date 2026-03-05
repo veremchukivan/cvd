@@ -121,10 +121,15 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const value = useMemo<DashboardContextValue>(() => {
-    const buildMapQuery = (): MapQuery =>
-      state.dateMode === 'day'
-        ? { metric: state.metric, dateMode: 'day', date: state.date }
-        : { metric: state.metric, dateMode: 'range', range: state.range };
+    const buildMapQuery = (): MapQuery => {
+      if (state.dateMode === 'day') {
+        return { metric: state.metric, dateMode: 'day', date: state.date };
+      }
+      if (state.dateMode === 'range') {
+        return { metric: state.metric, dateMode: 'range', range: state.range };
+      }
+      return { metric: state.metric, dateMode: 'total' };
+    };
 
     return {
       state,

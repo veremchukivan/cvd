@@ -154,7 +154,7 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
                 const isSelected = selectedCountryIso3?.toUpperCase() === iso.toUpperCase();
                 const fill = hasData
                   ? isSelected
-                    ? '#ffb703'
+                    ? '#f43f5e'
                     : choroplethColor(value, maxValue)
                   : 'url(#map-no-data-hatch)';
                 const hoverFill = hasData ? '#38bdf8' : 'url(#map-no-data-hatch-hover)';
@@ -164,7 +164,7 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
                     key={geo.rsmKey}
                     geography={geo}
                     fill={fill}
-                    stroke={isSelected ? '#ffb703' : '#0b1224'}
+                    stroke={isSelected ? '#be123c' : '#0b1224'}
                     strokeWidth={isSelected ? 1.2 : hasData ? 0.6 : 0.8}
                     style={{
                       default: {

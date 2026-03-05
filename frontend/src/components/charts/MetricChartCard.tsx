@@ -14,6 +14,8 @@ const metricVisuals: Partial<Record<SummaryMetric, MetricVisual>> = {
   today_cases: { color: '#4de0ff', fill: 'rgba(77,224,255,0.20)', kind: 'area', note: 'Flow intensity' },
   today_deaths: { color: '#ff8a47', fill: 'rgba(255,138,71,0.16)', kind: 'bar', note: 'Daily fatalities' },
   today_recovered: { color: '#80ed99', fill: 'rgba(128,237,153,0.16)', kind: 'line', note: 'Recovery pace' },
+  today_vaccinations: { color: '#80ed99', fill: 'rgba(128,237,153,0.16)', kind: 'line', note: 'Daily vaccination flow' },
+  vaccinations_total: { color: '#2ec4b6', fill: 'rgba(46,196,182,0.20)', kind: 'area', note: 'Total administered doses' },
   active: { color: '#b8c0ff', fill: 'rgba(184,192,255,0.15)', kind: 'line', note: 'Total active load' },
   incidence: { color: '#ffd166', fill: 'rgba(255,209,102,0.18)', kind: 'bar', note: 'New inferred cases' },
   mortality: { color: '#f78fb3', fill: 'rgba(247,143,179,0.16)', kind: 'line', note: 'Deaths / cases ratio' },

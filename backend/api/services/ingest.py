@@ -215,7 +215,8 @@ def ingest_owid_backfill(
     Backfills country/world daily totals from OWID into DataPoint.
 
     Notes:
-    - OWID currently provides totals/new values (cases, deaths, tests), but not recovered.
+    - OWID currently provides totals/new values for cases/deaths/tests and vaccination metrics,
+      but not recovered totals.
     - Non-country OWID aggregates (OWID_*) are skipped except OWID_WRL -> WORLD.
     """
     if from_date and to_date and from_date > to_date:
@@ -303,6 +304,34 @@ def ingest_owid_backfill(
                 population=population,
             )
 
+        total_vaccinations = _to_number(row.get("total_vaccinations"))
+        if total_vaccinations is None:
+            total_vaccinations = _estimate_absolute_from_per_hundred(
+                per_hundred=row.get("total_vaccinations_per_hundred"),
+                population=population,
+            )
+
+        people_vaccinated = _to_number(row.get("people_vaccinated"))
+        if people_vaccinated is None:
+            people_vaccinated = _estimate_absolute_from_per_hundred(
+                per_hundred=row.get("people_vaccinated_per_hundred"),
+                population=population,
+            )
+
+        people_fully_vaccinated = _to_number(row.get("people_fully_vaccinated"))
+        if people_fully_vaccinated is None:
+            people_fully_vaccinated = _estimate_absolute_from_per_hundred(
+                per_hundred=row.get("people_fully_vaccinated_per_hundred"),
+                population=population,
+            )
+
+        total_boosters = _to_number(row.get("total_boosters"))
+        if total_boosters is None:
+            total_boosters = _estimate_absolute_from_per_hundred(
+                per_hundred=row.get("total_boosters_per_hundred"),
+                population=population,
+            )
+
         new_cases = _to_number(row.get("new_cases"))
         if new_cases is None:
             new_cases = _estimate_absolute_from_per_million(
@@ -317,12 +346,26 @@ def ingest_owid_backfill(
                 population=population,
             )
 
+        new_vaccinations = _to_number(row.get("new_vaccinations"))
+        new_vaccinations_smoothed = _to_number(row.get("new_vaccinations_smoothed"))
+        if new_vaccinations_smoothed is None:
+            new_vaccinations_smoothed = _estimate_absolute_from_per_million(
+                per_million=row.get("new_vaccinations_smoothed_per_million"),
+                population=population,
+            )
+
         metric_values = {
             "cases": total_cases,
             "deaths": total_deaths,
             "tests": total_tests,
+            "vaccinations_total": total_vaccinations,
+            "people_vaccinated": people_vaccinated,
+            "people_fully_vaccinated": people_fully_vaccinated,
+            "boosters_total": total_boosters,
             "today_cases": new_cases,
             "today_deaths": new_deaths,
+            "today_vaccinations": new_vaccinations,
+            "today_vaccinations_smoothed": new_vaccinations_smoothed,
         }
 
         for metric, value in metric_values.items():
@@ -721,6 +764,14 @@ def _estimate_absolute_from_per_thousand(per_thousand: Any, population: float | 
     if per_thousand_num is None or population is None or population <= 0:
         return None
     estimated = (per_thousand_num * population) / 1_000
+    return float(max(round(estimated), 0))
+
+
+def _estimate_absolute_from_per_hundred(per_hundred: Any, population: float | None) -> float | None:
+    per_hundred_num = _to_number(per_hundred)
+    if per_hundred_num is None or population is None or population <= 0:
+        return None
+    estimated = (per_hundred_num * population) / 100
     return float(max(round(estimated), 0))
 
 

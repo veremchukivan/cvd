@@ -112,7 +112,12 @@ export async function fetchTimeseries(
 }
 
 function isTodayMetric(metric: SummaryMetric): metric is TodayMetric {
-  return metric === 'today_cases' || metric === 'today_deaths' || metric === 'today_recovered';
+  return (
+    metric === 'today_cases' ||
+    metric === 'today_deaths' ||
+    metric === 'today_recovered' ||
+    metric === 'today_vaccinations'
+  );
 }
 
 function aggregateTodayTimeseries(
@@ -198,7 +203,9 @@ export async function fetchCountryDetails(
   const params =
     query.dateMode === 'day'
       ? { metric, date: query.date }
-      : { metric, from: query.range.from, to: query.range.to };
+      : query.dateMode === 'range'
+        ? { metric, from: query.range.from, to: query.range.to }
+        : { metric };
 
   const { data } = await api.get<CountryDetailsResponse>(`/country/${iso3}/`, { params });
   return data;

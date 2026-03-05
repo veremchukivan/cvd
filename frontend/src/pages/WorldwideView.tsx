@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { fetchCountryDetails, fetchSummary } from '../api/map';
@@ -6,35 +6,38 @@ import WorldwideChartsGrid from '../components/worldwide/WorldwideChartsGrid';
 import WorldwideFilters from '../components/worldwide/WorldwideFilters';
 import WorldwideKpiGrid from '../components/worldwide/WorldwideKpiGrid';
 import { buildCountryQuery, metricToSummaryMetric, quickRangeBounds } from '../lib/analytics';
-import { CountryDetailsResponse, DateRange, Metric } from '../types/map';
-
-const rankMetricOptions: Array<{ value: Metric; label: string }> = [
-  { value: 'cases', label: 'Cases (daily)' },
-  { value: 'deaths', label: 'Deaths (daily)' },
-  { value: 'recovered', label: 'Recovered (daily)' },
-  { value: 'active', label: 'Active' },
-  { value: 'incidence', label: 'Incidence' },
-  { value: 'mortality', label: 'Mortality (%)' },
-];
+import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
+import { CountryDetailsResponse, DateMode, DateRange, Metric } from '../types/map';
 
 const WorldwideView: React.FC = () => {
   const today = formatISO(new Date(), { representation: 'date' });
-  const [dateMode, setDateMode] = useState<'day' | 'range'>('day');
+  const [dateMode, setDateMode] = useState<DateMode>('day');
   const [date, setDate] = useState(today);
   const [range, setRange] = useState<DateRange>({
     from: formatISO(subDays(new Date(), 13), { representation: 'date' }),
     to: today,
   });
   const [rankMetric, setRankMetric] = useState<Metric>('cases');
+  const rankMetricOptions = useMemo(() => metricOptionsForDateMode(dateMode), [dateMode]);
+
+  useEffect(() => {
+    if (isMetricAllowedForDateMode(rankMetric, dateMode)) {
+      return;
+    }
+    const fallback = rankMetricOptions[0]?.value;
+    if (fallback) {
+      setRankMetric(fallback);
+    }
+  }, [dateMode, rankMetric, rankMetricOptions]);
 
   const queryCases = buildCountryQuery('WORLD', 'today_cases', dateMode, date, range);
   const queryDeaths = buildCountryQuery('WORLD', 'today_deaths', dateMode, date, range);
-  const queryRecovered = buildCountryQuery('WORLD', 'today_recovered', dateMode, date, range);
+  const queryVaccinations = buildCountryQuery('WORLD', 'today_vaccinations', dateMode, date, range);
   const queryActive = buildCountryQuery('WORLD', 'active', dateMode, date, range);
   const queryMortality = buildCountryQuery('WORLD', 'mortality', dateMode, date, range);
 
   const worldQueries = useQueries({
-    queries: [queryCases, queryDeaths, queryRecovered, queryActive, queryMortality].map((query) => ({
+    queries: [queryCases, queryDeaths, queryVaccinations, queryActive, queryMortality].map((query) => ({
       queryKey: ['world-country-metric', query],
       queryFn: () => fetchCountryDetails(query),
       staleTime: 5 * 60 * 1000,
@@ -43,7 +46,7 @@ const WorldwideView: React.FC = () => {
 
   const casesData = worldQueries[0]?.data as CountryDetailsResponse | undefined;
   const deathsData = worldQueries[1]?.data as CountryDetailsResponse | undefined;
-  const recoveredData = worldQueries[2]?.data as CountryDetailsResponse | undefined;
+  const vaccinationsData = worldQueries[2]?.data as CountryDetailsResponse | undefined;
   const activeData = worldQueries[3]?.data as CountryDetailsResponse | undefined;
   const mortalityData = worldQueries[4]?.data as CountryDetailsResponse | undefined;
   const worldLoading = worldQueries.some((item) => item.isLoading);
@@ -56,7 +59,9 @@ const WorldwideView: React.FC = () => {
       const params =
         dateMode === 'day'
           ? { metric: rankSummaryMetric, date }
-          : { metric: rankSummaryMetric, from: range.from, to: range.to };
+          : dateMode === 'range'
+            ? { metric: rankSummaryMetric, from: range.from, to: range.to }
+            : { metric: rankSummaryMetric };
       const response = await fetchSummary(params);
       return response.data
         .filter((item) => item.isoCode?.toUpperCase() !== 'WORLD')
@@ -66,7 +71,8 @@ const WorldwideView: React.FC = () => {
   });
 
   const ranking = useMemo(() => rankingQuery.data ?? [], [rankingQuery.data]);
-  const periodLabel = dateMode === 'day' ? date : `${range.from} → ${range.to}`;
+  const periodLabel =
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
   const totals = casesData?.totals || casesData?.snapshot;
 
   const timelineChartData = useMemo((): Array<Record<string, unknown>> => {
@@ -91,18 +97,18 @@ const WorldwideView: React.FC = () => {
         line: { color: '#ff8a47', width: 2.3 },
       });
     }
-    if (recoveredData?.series?.length) {
+    if (vaccinationsData?.series?.length) {
       traces.push({
-        x: recoveredData.series.map((p) => p.date),
-        y: recoveredData.series.map((p) => p.value ?? null),
+        x: vaccinationsData.series.map((p) => p.date),
+        y: vaccinationsData.series.map((p) => p.value ?? null),
         type: 'scatter',
         mode: 'lines',
-        name: 'Recovered (daily)',
+        name: 'Vaccinations (daily)',
         line: { color: '#80ed99', width: 2.1 },
       });
     }
     return traces;
-  }, [casesData?.series, deathsData?.series, recoveredData?.series]);
+  }, [casesData?.series, deathsData?.series, vaccinationsData?.series]);
 
   const rankLabels = useMemo(() => ranking.map((item) => item.name || item.isoCode), [ranking]);
   const rankValues = useMemo(() => ranking.map((item) => item.value ?? 0), [ranking]);
@@ -139,7 +145,7 @@ const WorldwideView: React.FC = () => {
         periodLabel={periodLabel}
         casesHeadline={casesData?.headline}
         deathsHeadline={deathsData?.headline}
-        recoveredHeadline={recoveredData?.headline}
+        vaccinationsHeadline={vaccinationsData?.headline}
         activeHeadline={activeData?.headline}
         mortalityHeadline={mortalityData?.headline}
         totalCases={totals?.cases}

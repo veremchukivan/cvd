@@ -16,7 +16,9 @@ export function useMapSummary(input: UseMapSummaryInput): UseMapSummaryResult {
   const params: Parameters<typeof fetchSummary>[0] =
     input.dateMode === 'day'
       ? { metric: apiMetric, date: input.date }
-      : { metric: apiMetric, from: input.range.from, to: input.range.to };
+      : input.dateMode === 'range'
+        ? { metric: apiMetric, from: input.range.from, to: input.range.to }
+        : { metric: apiMetric };
 
   const query = useQuery({
     queryKey: ['map-summary', params],
@@ -48,5 +50,6 @@ function mapMetricToTodayMetric(metric: Metric): Parameters<typeof fetchSummary>
   if (metric === 'cases') return 'today_cases';
   if (metric === 'deaths') return 'today_deaths';
   if (metric === 'recovered') return 'today_recovered';
+  if (metric === 'vaccinations_total') return 'today_vaccinations';
   return metric;
 }

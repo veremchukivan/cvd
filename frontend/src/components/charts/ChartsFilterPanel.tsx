@@ -3,11 +3,11 @@ import CountrySearchSelect from '../analytics/CountrySearchSelect';
 import DatePickerInput from '../filters/DatePickerInput';
 import { dateDaysAgo, QuickRangeLabel } from '../../lib/analytics';
 import { CountryOption } from '../../types/country';
-import { DateRange } from '../../types/map';
+import { DateMode, DateRange } from '../../types/map';
 
 type ChartsFilterPanelProps = {
-  dateMode: 'day' | 'range';
-  onDateModeChange: (mode: 'day' | 'range') => void;
+  dateMode: DateMode;
+  onDateModeChange: (mode: DateMode) => void;
   date: string;
   onDateChange: (date: string) => void;
   range: DateRange;
@@ -59,6 +59,13 @@ const ChartsFilterPanel: React.FC<ChartsFilterPanelProps> = ({
           >
             Period
           </button>
+          <button
+            type="button"
+            className={`charts-toggle-btn ${dateMode === 'total' ? 'charts-toggle-btn-active' : ''}`}
+            onClick={() => onDateModeChange('total')}
+          >
+            Total
+          </button>
         </div>
       </div>
 
@@ -84,7 +91,7 @@ const ChartsFilterPanel: React.FC<ChartsFilterPanelProps> = ({
               </button>
             </div>
           </>
-        ) : (
+        ) : dateMode === 'range' ? (
           <>
             <label className="filter-label">Period window</label>
             <div className="charts-date-range-row">
@@ -112,6 +119,13 @@ const ChartsFilterPanel: React.FC<ChartsFilterPanelProps> = ({
               <button type="button" className="charts-chip" onClick={() => onQuickRange('ytd')}>
                 YTD
               </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="filter-label">Period window</label>
+            <div className="charts-chip-row">
+              <span className="charts-chip">All-time aggregate (without dates)</span>
             </div>
           </>
         )}

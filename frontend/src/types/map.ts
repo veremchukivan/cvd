@@ -4,15 +4,16 @@ export type Metric =
   | 'recovered'
   | 'active'
   | 'tests'
+  | 'vaccinations_total'
   | 'incidence'
   | 'mortality';
 
-export type TodayMetric = 'today_cases' | 'today_deaths' | 'today_recovered';
+export type TodayMetric = 'today_cases' | 'today_deaths' | 'today_recovered' | 'today_vaccinations';
 export type SummaryMetric = Metric | TodayMetric;
 
 export type MapMode = 'choropleth' | 'markers' | 'heatmap';
 
-export type DateMode = 'day' | 'range';
+export type DateMode = 'day' | 'range' | 'total';
 
 export type DateRange = {
   from: string; // ISO date (YYYY-MM-DD)
@@ -29,6 +30,10 @@ export type MapQuery =
       metric: Metric;
       dateMode: 'range';
       range: DateRange;
+    }
+  | {
+      metric: Metric;
+      dateMode: 'total';
     };
 
 export type CountryDetailsQuery =
@@ -43,6 +48,11 @@ export type CountryDetailsQuery =
       metric: SummaryMetric;
       dateMode: 'range';
       range: DateRange;
+    }
+  | {
+      iso3: string;
+      metric: SummaryMetric;
+      dateMode: 'total';
     };
 
 export type ValuesByIso3 = Record<string, number>;
@@ -53,11 +63,17 @@ export interface CountryTotalsSnapshot {
   recovered?: number | null;
   active?: number | null;
   tests?: number | null;
+  vaccinations_total?: number | null;
+  people_vaccinated?: number | null;
+  people_fully_vaccinated?: number | null;
+  boosters_total?: number | null;
   incidence?: number | null;
   mortality?: number | null;
   today_cases?: number | null;
   today_deaths?: number | null;
   today_recovered?: number | null;
+  today_vaccinations?: number | null;
+  today_vaccinations_smoothed?: number | null;
 }
 
 export interface DailyPeakDatum {
@@ -71,6 +87,7 @@ export interface CountryDailyPeaks {
   recovered?: DailyPeakDatum;
   active?: DailyPeakDatum;
   tests?: DailyPeakDatum;
+  vaccinations_total?: DailyPeakDatum;
 }
 
 export interface CountryDataCoverage {

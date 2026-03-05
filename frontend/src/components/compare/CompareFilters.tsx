@@ -1,14 +1,14 @@
 import React from 'react';
 import DatePickerInput from '../filters/DatePickerInput';
 import { QuickRangeLabel } from '../../lib/analytics';
-import { DateRange, Metric } from '../../types/map';
+import { DateMode, DateRange, Metric } from '../../types/map';
 
 type CompareFiltersProps = {
   metric: Metric;
   metricOptions: Array<{ value: Metric; label: string }>;
   onMetricChange: (metric: Metric) => void;
-  dateMode: 'day' | 'range';
-  onDateModeChange: (mode: 'day' | 'range') => void;
+  dateMode: DateMode;
+  onDateModeChange: (mode: DateMode) => void;
   date: string;
   onDateChange: (date: string) => void;
   range: DateRange;
@@ -63,6 +63,13 @@ const CompareFilters: React.FC<CompareFiltersProps> = ({
         >
           Period
         </button>
+        <button
+          type="button"
+          className={`pill ${dateMode === 'total' ? 'pill-active' : ''}`}
+          onClick={() => onDateModeChange('total')}
+        >
+          Total
+        </button>
       </div>
     </div>
 
@@ -71,7 +78,7 @@ const CompareFilters: React.FC<CompareFiltersProps> = ({
         <label className="filter-label">Date</label>
         <DatePickerInput value={date} onChange={onDateChange} />
       </div>
-    ) : (
+    ) : dateMode === 'range' ? (
       <div className="filter-group range-group">
         <label className="filter-label">Date range</label>
         <div className="range-inputs">
@@ -97,6 +104,13 @@ const CompareFilters: React.FC<CompareFiltersProps> = ({
           <button type="button" className="pill pill-ghost" onClick={() => onQuickRange('ytd')}>
             YTD
           </button>
+        </div>
+      </div>
+    ) : (
+      <div className="filter-group">
+        <label className="filter-label">Date range</label>
+        <div className="mode-toggle">
+          <span className="pill pill-ghost">All-time aggregate (without dates)</span>
         </div>
       </div>
     )}

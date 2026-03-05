@@ -1,5 +1,5 @@
 import { formatISO, startOfYear, subDays } from 'date-fns';
-import { CountryDetailsQuery, DateRange, Metric, SummaryMetric } from '../types/map';
+import { CountryDetailsQuery, DateMode, DateRange, Metric, SummaryMetric } from '../types/map';
 
 export type QuickRangeLabel = '7d' | '30d' | 'ytd';
 
@@ -7,11 +7,13 @@ const summaryMetricLabels: Record<SummaryMetric, string> = {
   today_cases: 'Cases (daily)',
   today_deaths: 'Deaths (daily)',
   today_recovered: 'Recovered (daily)',
+  today_vaccinations: 'Vaccinations (daily)',
   cases: 'Cases',
   deaths: 'Deaths',
   recovered: 'Recovered',
   active: 'Active',
   tests: 'Tests',
+  vaccinations_total: 'Vaccinations (total)',
   incidence: 'Incidence',
   mortality: 'Mortality (%)',
 };
@@ -20,6 +22,7 @@ export function metricToSummaryMetric(metric: Metric): SummaryMetric {
   if (metric === 'cases') return 'today_cases';
   if (metric === 'deaths') return 'today_deaths';
   if (metric === 'recovered') return 'today_recovered';
+  if (metric === 'vaccinations_total') return 'today_vaccinations';
   return metric;
 }
 
@@ -48,7 +51,7 @@ export function dateDaysAgo(days: number): string {
 export function maybeBuildCountryQuery(
   iso3: string | null,
   metric: SummaryMetric,
-  dateMode: 'day' | 'range',
+  dateMode: DateMode,
   date: string,
   range: DateRange
 ): CountryDetailsQuery | null {
@@ -56,20 +59,26 @@ export function maybeBuildCountryQuery(
   if (dateMode === 'day') {
     return { iso3, metric, dateMode: 'day', date };
   }
-  return { iso3, metric, dateMode: 'range', range };
+  if (dateMode === 'range') {
+    return { iso3, metric, dateMode: 'range', range };
+  }
+  return { iso3, metric, dateMode: 'total' };
 }
 
 export function buildCountryQuery(
   iso3: string,
   metric: SummaryMetric,
-  dateMode: 'day' | 'range',
+  dateMode: DateMode,
   date: string,
   range: DateRange
 ): CountryDetailsQuery {
   if (dateMode === 'day') {
     return { iso3, metric, dateMode: 'day', date };
   }
-  return { iso3, metric, dateMode: 'range', range };
+  if (dateMode === 'range') {
+    return { iso3, metric, dateMode: 'range', range };
+  }
+  return { iso3, metric, dateMode: 'total' };
 }
 
 export function countryMatches(name: string, iso3: string, rawNeedle: string): boolean {

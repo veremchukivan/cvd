@@ -138,6 +138,60 @@ class SyncDiseaseCommandTests(TestCase):
             )
 
 
+class CeleryIngestTaskTests(TestCase):
+    @patch("api.tasks.ingest_disease_data")
+    def test_ingest_disease_latest_task_calls_latest_ingest(self, latest_mock):
+        from api.tasks import ingest_disease_latest
+
+        ingest_disease_latest.run()
+
+        latest_mock.assert_called_once_with()
+
+    @patch("api.tasks.ingest_disease_states_data")
+    def test_ingest_disease_states_task_calls_states_ingest(self, states_mock):
+        from api.tasks import ingest_disease_states
+
+        ingest_disease_states.run()
+
+        states_mock.assert_called_once_with()
+
+    @patch("api.tasks.ingest_disease_historical_data")
+    def test_ingest_disease_historical_task_passes_lastdays(self, historical_mock):
+        from api.tasks import ingest_disease_historical
+
+        ingest_disease_historical.run(lastdays="all")
+
+        historical_mock.assert_called_once_with(lastdays="all")
+
+    @patch("api.tasks.ingest_disease_provinces_data")
+    def test_ingest_disease_provinces_task_passes_lastdays(self, provinces_mock):
+        from api.tasks import ingest_disease_provinces
+
+        ingest_disease_provinces.run(lastdays="all")
+
+        provinces_mock.assert_called_once_with(lastdays="all")
+
+    @patch("api.tasks.ingest_disease_provinces_data")
+    @patch("api.tasks.ingest_disease_states_data")
+    @patch("api.tasks.ingest_disease_data")
+    @patch("api.tasks.ingest_disease_historical_data")
+    def test_ingest_disease_aggregate_task_runs_all_steps(
+        self,
+        historical_mock,
+        latest_mock,
+        states_mock,
+        provinces_mock,
+    ):
+        from api.tasks import ingest_disease
+
+        ingest_disease.run(lastdays="all", province_lastdays="all")
+
+        historical_mock.assert_called_once_with(lastdays="all")
+        latest_mock.assert_called_once_with()
+        states_mock.assert_called_once_with()
+        provinces_mock.assert_called_once_with(lastdays="all")
+
+
 class OwidBackfillCommandTests(TestCase):
     @patch("api.management.commands.ingest_owid_backfill.ingest_owid_backfill")
     def test_runs_with_date_range(self, ingest_mock):

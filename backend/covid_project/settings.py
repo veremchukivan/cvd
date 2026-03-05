@@ -1,8 +1,8 @@
 import os
-from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -91,8 +91,27 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
-    "ingest-disease-every-12h": {
+    "ingest-disease-latest-every-12h": {
+        "task": "api.tasks.ingest_disease_latest",
+        "schedule": crontab(minute=0, hour="*/12"),
+    },
+    "ingest-disease-states-every-12h": {
+        "task": "api.tasks.ingest_disease_states",
+        "schedule": crontab(minute=10, hour="*/12"),
+    },
+    "ingest-disease-provinces-every-12h": {
+        "task": "api.tasks.ingest_disease_provinces",
+        "schedule": crontab(minute=20, hour="*/12"),
+        "kwargs": {"lastdays": "30"},
+    },
+    "ingest-disease-historical-daily": {
+        "task": "api.tasks.ingest_disease_historical",
+        "schedule": crontab(minute=30, hour=3),
+        "kwargs": {"lastdays": "30"},
+    },
+    "ingest-disease-full-sync-weekly": {
         "task": "api.tasks.ingest_disease",
-        "schedule": timedelta(hours=12),
+        "schedule": crontab(minute=45, hour=4, day_of_week="sun"),
+        "kwargs": {"lastdays": "all", "province_lastdays": "all"},
     },
 }

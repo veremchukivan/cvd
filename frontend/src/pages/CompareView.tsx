@@ -118,9 +118,11 @@ const CompareView: React.FC = () => {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  const summaryMetric = metricToSummaryMetric(metric);
+  const summaryMetric = metricToSummaryMetric(metric, dateMode);
   const primaryQuery = maybeBuildCountryQuery(primaryIso, summaryMetric, dateMode, date, range);
   const compareQuery = maybeBuildCountryQuery(compareIso, summaryMetric, dateMode, date, range);
+  const vaccinationsMetric: SummaryMetric | null =
+    dateMode === 'total' ? 'vaccinations_total' : null;
 
   const mainComparison = useQueries({
     queries: [primaryQuery, compareQuery].map((query) => ({
@@ -141,8 +143,12 @@ const CompareView: React.FC = () => {
 
   const extraMetricQueries = useQueries({
     queries: ([
-      maybeBuildCountryQuery(primaryIso, 'today_vaccinations' as SummaryMetric, dateMode, date, range),
-      maybeBuildCountryQuery(compareIso, 'today_vaccinations' as SummaryMetric, dateMode, date, range),
+      vaccinationsMetric
+        ? maybeBuildCountryQuery(primaryIso, vaccinationsMetric, dateMode, date, range)
+        : null,
+      vaccinationsMetric
+        ? maybeBuildCountryQuery(compareIso, vaccinationsMetric, dateMode, date, range)
+        : null,
       maybeBuildCountryQuery(primaryIso, 'mortality' as SummaryMetric, dateMode, date, range),
       maybeBuildCountryQuery(compareIso, 'mortality' as SummaryMetric, dateMode, date, range),
     ] as const).map((query) => ({
@@ -250,6 +256,7 @@ const CompareView: React.FC = () => {
         secondaryVaccinations={compareVaccinations}
         primaryMortality={primaryMortality}
         secondaryMortality={compareMortality}
+        vaccinationsEnabled={Boolean(vaccinationsMetric)}
         primaryName={primaryName}
         secondaryName={compareName}
         loading={mainLoading || extraLoading}

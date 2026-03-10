@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Plot from '../common/Plot';
 import { summaryMetricLabel } from '../../lib/analytics';
 import { CountryDetailsResponse, SummaryMetric } from '../../types/map';
@@ -11,6 +11,7 @@ type CompareTrendChartProps = {
   secondaryVaccinations?: CountryDetailsResponse;
   primaryMortality?: CountryDetailsResponse;
   secondaryMortality?: CountryDetailsResponse;
+  vaccinationsEnabled: boolean;
   primaryName?: string;
   secondaryName?: string;
   loading: boolean;
@@ -154,6 +155,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   secondaryVaccinations,
   primaryMortality,
   secondaryMortality,
+  vaccinationsEnabled,
   primaryName,
   secondaryName,
   loading,
@@ -179,6 +181,12 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   const [customStyle, setCustomStyle] = useState<CompareStyle>('line');
   const [showPrimarySeries, setShowPrimarySeries] = useState(true);
   const [showSecondarySeries, setShowSecondarySeries] = useState(true);
+
+  useEffect(() => {
+    if (!vaccinationsEnabled && customVariable === 'vaccinations') {
+      setCustomVariable('selected');
+    }
+  }, [customVariable, vaccinationsEnabled]);
 
   const aligned = useMemo(() => alignTwoSeries(primarySeries, secondarySeries), [primarySeries, secondarySeries]);
   const hasOverlappingSeries = aligned.some((item) => item.primary !== null && item.secondary !== null);
@@ -219,8 +227,8 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   const customMeta = useMemo(() => {
     if (customVariable === 'vaccinations') {
       return {
-        label: 'Vaccinations (daily)',
-        isFlow: true,
+        label: 'Vaccinations (total)',
+        isFlow: false,
         primary: primaryVaccinationsSeries,
         secondary: secondaryVaccinationsSeries,
         primaryColor: '#80ed99',
@@ -547,7 +555,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               className="charts-select compare-custom-select"
             >
               <option value="selected">Selected metric ({summaryMetricLabel(metric)})</option>
-              <option value="vaccinations">Vaccinations (daily)</option>
+              {vaccinationsEnabled ? <option value="vaccinations">Vaccinations (total)</option> : null}
               <option value="mortality">Mortality (%)</option>
             </select>
           </div>
@@ -863,9 +871,11 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Vaccinations (daily) trend</p>
+            <p className="panel-kicker">Vaccinations (total) trend</p>
           </div>
-          {primaryVaccinationsSeries.length || secondaryVaccinationsSeries.length ? (
+          {!vaccinationsEnabled ? (
+            <div className="chart-placeholder">Vaccination comparisons are available only in Total mode.</div>
+          ) : primaryVaccinationsSeries.length || secondaryVaccinationsSeries.length ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
                 data={[
@@ -912,7 +922,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">No vaccination series for selected countries.</div>
+            <div className="chart-placeholder">No total vaccination series for selected countries.</div>
           )}
         </div>
 
@@ -974,7 +984,9 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           <div className="chart-header">
             <p className="panel-kicker">Vaccinations vs Mortality (scatter)</p>
           </div>
-          {hasCrossMetricPoints ? (
+          {!vaccinationsEnabled ? (
+            <div className="chart-placeholder">Vaccination comparisons are available only in Total mode.</div>
+          ) : hasCrossMetricPoints ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
                 data={[
@@ -1016,7 +1028,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                   xaxis: {
                     gridcolor: '#1f2937',
                     tickfont: { color: '#8ea0b7' },
-                    title: { text: 'Vaccinations (daily)', font: { color: '#8ea0b7', size: 11 } },
+                    title: { text: 'Vaccinations (total)', font: { color: '#8ea0b7', size: 11 } },
                   },
                   yaxis: {
                     gridcolor: '#1f2937',
@@ -1031,7 +1043,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">No overlapping vaccination + mortality points.</div>
+            <div className="chart-placeholder">No overlapping total vaccination + mortality points.</div>
           )}
         </div>
       </div>

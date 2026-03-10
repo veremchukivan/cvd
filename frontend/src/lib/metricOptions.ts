@@ -12,18 +12,21 @@ const DAY_METRIC_OPTIONS: MetricOption[] = [
   { label: 'Mortality (%)', value: 'mortality' },
 ];
 
-const RANGE_TOTAL_EXTRA_OPTIONS: MetricOption[] = [
-  { label: 'Vaccinations (daily)', value: 'vaccinations_total' },
+const RANGE_EXTRA_OPTIONS: MetricOption[] = [
   { label: 'Active', value: 'active' },
   { label: 'Tests', value: 'tests' },
 ];
 
 const RANGE_METRIC_OPTIONS: MetricOption[] = [
   ...DAY_METRIC_OPTIONS,
-  ...RANGE_TOTAL_EXTRA_OPTIONS,
+  ...RANGE_EXTRA_OPTIONS,
 ];
 
-const TOTAL_METRIC_OPTIONS: MetricOption[] = RANGE_METRIC_OPTIONS;
+const TOTAL_METRIC_OPTIONS: MetricOption[] = [
+  ...DAY_METRIC_OPTIONS,
+  { label: 'Vaccinations (total)', value: 'vaccinations_total' },
+  ...RANGE_EXTRA_OPTIONS,
+];
 
 export function metricOptionsForDateMode(dateMode: DateMode): MetricOption[] {
   if (dateMode === 'day') {

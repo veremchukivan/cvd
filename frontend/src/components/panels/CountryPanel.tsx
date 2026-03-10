@@ -64,7 +64,7 @@ function buildQuery(
   if (!resolvedIso) {
     return null;
   }
-  const metricForDetails = mapMetricToDetailsMetric(metric);
+  const metricForDetails = mapMetricToDetailsMetric(metric, dateMode);
 
   if (dateMode === 'day') {
     return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'day', date };
@@ -75,11 +75,13 @@ function buildQuery(
   return { iso3: resolvedIso, metric: metricForDetails, dateMode: 'total' };
 }
 
-function mapMetricToDetailsMetric(metric: Metric): SummaryMetric {
+function mapMetricToDetailsMetric(metric: Metric, dateMode: DateMode): SummaryMetric {
   if (metric === 'cases') return 'today_cases';
   if (metric === 'deaths') return 'today_deaths';
   if (metric === 'recovered') return 'today_recovered';
-  if (metric === 'vaccinations_total') return 'today_vaccinations';
+  if (metric === 'vaccinations_total') {
+    return dateMode === 'total' ? 'vaccinations_total' : 'today_vaccinations';
+  }
   return metric;
 }
 
@@ -196,7 +198,6 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
   const showsDailyFlowInHeadline =
     metric === 'cases' ||
     metric === 'deaths' ||
-    metric === 'vaccinations_total' ||
     metric === 'incidence';
 
   return (

@@ -42,6 +42,7 @@ type Rotation = [number, number, number];
 
 type DragState = {
   pointerId: number;
+  pointerType: string;
   startX: number;
   startY: number;
   startRotation: Rotation;
@@ -131,6 +132,16 @@ function createAshParticles(count: number): AshParticle[] {
   });
 }
 
+function getClickSuppressionDistance(pointerType: string): number {
+  if (pointerType === 'mouse') {
+    return 6;
+  }
+  if (pointerType === 'pen') {
+    return 10;
+  }
+  return 14;
+}
+
 const GlobeMap: React.FC<GlobeMapProps> = ({
   valuesByIso3,
   hoverValuesByIso3 = {},
@@ -142,6 +153,7 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
 }) => {
   const [rotation, setRotation] = useState<Rotation>([-15, -20, 0]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isPointerActive, setIsPointerActive] = useState(false);
   const [autoRotatePausedUntil, setAutoRotatePausedUntil] = useState(0);
   const [hoverBadge, setHoverBadge] = useState<HoverBadgeState | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -202,13 +214,14 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       }
       dragStateRef.current = null;
       setIsDragging(false);
+      setIsPointerActive(false);
       pauseAutoRotate(1800);
     },
     [pauseAutoRotate]
   );
 
   useEffect(() => {
-    if (!isDragging) {
+    if (!isPointerActive || typeof window === 'undefined') {
       return;
     }
 
@@ -220,9 +233,13 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
 
       const dx = event.clientX - dragState.startX;
       const dy = event.clientY - dragState.startY;
-      const dragDistance = Math.abs(dx) + Math.abs(dy);
-      if (dragDistance > 4) {
+      const dragDistance = Math.hypot(dx, dy);
+      if (dragDistance <= getClickSuppressionDistance(dragState.pointerType)) {
+        return;
+      }
+      if (!movedDuringDragRef.current) {
         movedDuringDragRef.current = true;
+        setIsDragging(true);
       }
 
       setRotation([
@@ -232,17 +249,33 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       ]);
     };
 
-    const stopDragging = (event: PointerEvent) => finishDragging(event.pointerId);
+    const stopDraggingByPointer = (event: PointerEvent) => finishDragging(event.pointerId);
+    const stopDragging = () => finishDragging();
+    const stopDraggingOnHidden = () => {
+      if (document.hidden) {
+        finishDragging();
+      }
+    };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('pointerup', stopDragging);
-    window.addEventListener('pointercancel', stopDragging);
+    window.addEventListener('pointerup', stopDraggingByPointer);
+    window.addEventListener('pointercancel', stopDraggingByPointer);
+    window.addEventListener('mouseup', stopDragging);
+    window.addEventListener('touchend', stopDragging);
+    window.addEventListener('touchcancel', stopDragging);
+    window.addEventListener('blur', stopDragging);
+    document.addEventListener('visibilitychange', stopDraggingOnHidden);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopDragging);
-      window.removeEventListener('pointercancel', stopDragging);
+      window.removeEventListener('pointerup', stopDraggingByPointer);
+      window.removeEventListener('pointercancel', stopDraggingByPointer);
+      window.removeEventListener('mouseup', stopDragging);
+      window.removeEventListener('touchend', stopDragging);
+      window.removeEventListener('touchcancel', stopDragging);
+      window.removeEventListener('blur', stopDragging);
+      document.removeEventListener('visibilitychange', stopDraggingOnHidden);
     };
-  }, [finishDragging, isDragging]);
+  }, [isPointerActive, finishDragging]);
 
   const updateHoverBadge = (
     event: React.MouseEvent<SVGPathElement>,
@@ -273,18 +306,23 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
     if (dragStateRef.current) {
       dragStateRef.current = null;
       setIsDragging(false);
+      setIsPointerActive(false);
     }
     dragStateRef.current = {
       pointerId: event.pointerId,
+      pointerType: event.pointerType || 'mouse',
       startX: event.clientX,
       startY: event.clientY,
       startRotation: rotation,
     };
-    setIsDragging(true);
+    setIsPointerActive(true);
     setHoverBadge(null);
   };
 
   const handleCountrySelect = (iso: string, name?: string) => {
+    if (dragStateRef.current) {
+      finishDragging();
+    }
     if (!iso) {
       return;
     }
@@ -302,6 +340,8 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       onPointerDown={handlePointerDown}
       onPointerUp={(event) => finishDragging(event.pointerId)}
       onPointerCancel={(event) => finishDragging(event.pointerId)}
+      onMouseUp={() => finishDragging()}
+      onTouchEnd={() => finishDragging()}
       onPointerLeave={() => setHoverBadge(null)}
     >
       <div className="globe-backdrop" aria-hidden="true" />
@@ -389,7 +429,14 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
                     },
                     pressed: { fill: hoverFill, outline: 'none' },
                   }}
-                  onClick={() => handleCountrySelect(iso, countryName)}
+                  onMouseUp={() => handleCountrySelect(iso, countryName)}
+                  onTouchEnd={() => handleCountrySelect(iso, countryName)}
+                  onKeyDown={(event) => {
+                    if ((event.key === 'Enter' || event.key === ' ') && iso) {
+                      event.preventDefault();
+                      onSelect(iso, countryName);
+                    }
+                  }}
                   onMouseEnter={(event) =>
                     !isDragging &&
                     iso &&

@@ -63,7 +63,6 @@ const MapDashboardInner: React.FC = () => {
             filter by single day, period, or total mode from the control dock below the map.
           </p>
         </div>
-        <div className="badge">API: {process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api/v1'}</div>
       </header>
 
       {isError && <div className="banner banner-error">Unable to load map data</div>}

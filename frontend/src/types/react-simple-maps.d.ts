@@ -29,9 +29,12 @@ declare module 'react-simple-maps' {
     strokeWidth?: number;
     style?: Record<string, Record<string, string | number>>;
     onClick?: () => void;
+    onMouseUp?: React.MouseEventHandler<SVGPathElement>;
+    onTouchEnd?: React.TouchEventHandler<SVGPathElement>;
     onMouseEnter?: React.MouseEventHandler<SVGPathElement>;
     onMouseMove?: React.MouseEventHandler<SVGPathElement>;
     onMouseLeave?: React.MouseEventHandler<SVGPathElement>;
+    onKeyDown?: React.KeyboardEventHandler<SVGPathElement>;
     onBlur?: React.FocusEventHandler<SVGPathElement>;
     onFocus?: React.FocusEventHandler<SVGPathElement>;
     'aria-label'?: string;

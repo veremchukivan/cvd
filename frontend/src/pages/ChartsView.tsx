@@ -19,14 +19,22 @@ import { countryMatches, maybeBuildCountryQuery, quickRangeBounds } from '../lib
 import { CountryOption } from '../types/country';
 import { CountryDetailsResponse, DateMode, DateRange, SummaryMetric } from '../types/map';
 
-const chartMetricCards: Array<{ metric: SummaryMetric; label: string }> = [
+const BASE_CHART_METRIC_CARDS: Array<{ metric: SummaryMetric; label: string }> = [
   { metric: 'today_cases', label: 'Cases (daily)' },
   { metric: 'today_deaths', label: 'Deaths (daily)' },
-  { metric: 'today_vaccinations', label: 'Vaccinations (daily)' },
   { metric: 'active', label: 'Active (total)' },
-  { metric: 'vaccinations_total', label: 'Vaccinations (total)' },
   { metric: 'mortality', label: 'Mortality (%)' },
 ];
+
+function chartMetricCardsForMode(dateMode: DateMode): Array<{ metric: SummaryMetric; label: string }> {
+  if (dateMode !== 'total') {
+    return BASE_CHART_METRIC_CARDS;
+  }
+  return [
+    ...BASE_CHART_METRIC_CARDS,
+    { metric: 'vaccinations_total', label: 'Vaccinations (total)' },
+  ];
+}
 
 const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
@@ -88,6 +96,9 @@ const ChartsView: React.FC = () => {
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const countrySearchRef = useRef<HTMLDivElement | null>(null);
+  const chartMetricCards = useMemo(() => chartMetricCardsForMode(dateMode), [dateMode]);
+  const vaccinationsEnabled = dateMode === 'total';
+  const vaccinationMetric: SummaryMetric | null = vaccinationsEnabled ? 'vaccinations_total' : null;
 
   const countryOptionsQuery = useQuery({
     queryKey: ['charts-country-options'],
@@ -166,8 +177,12 @@ const ChartsView: React.FC = () => {
   const casesSeries = useMemo(() => metricData.today_cases?.series ?? [], [metricData.today_cases?.series]);
   const deathsSeries = useMemo(() => metricData.today_deaths?.series ?? [], [metricData.today_deaths?.series]);
   const vaccinationsSeries = useMemo(
-    () => metricData.today_vaccinations?.series ?? [],
-    [metricData.today_vaccinations?.series]
+    () => (vaccinationMetric ? metricData[vaccinationMetric]?.series ?? [] : []),
+    [metricData, vaccinationMetric]
+  );
+  const vaccinationsHeadline = useMemo(
+    () => (vaccinationMetric ? toNumeric(metricData[vaccinationMetric]?.headline) || 0 : 0),
+    [metricData, vaccinationMetric]
   );
   const mortalitySeries = useMemo(() => metricData.mortality?.series ?? [], [metricData.mortality?.series]);
 
@@ -201,7 +216,7 @@ const ChartsView: React.FC = () => {
         y: vaccinationsSeries.map((point) => toNumeric(point.value)),
         type: 'scatter',
         mode: 'lines',
-        name: 'Vaccinations',
+        name: 'Vaccinations (total)',
         line: { color: '#80ed99', width: 2.2, dash: 'dot' },
       });
     }
@@ -252,18 +267,21 @@ const ChartsView: React.FC = () => {
         value: toNumeric(metricData.today_deaths?.headline) || 0,
         color: '#ff8a47',
       },
-      {
-        label: 'Vaccinations',
-        metric: 'today_vaccinations',
-        value: toNumeric(metricData.today_vaccinations?.headline) || 0,
-        color: '#80ed99',
-      },
     ];
+    if (vaccinationsEnabled) {
+      values.push({
+        label: 'Vaccinations',
+        metric: 'vaccinations_total',
+        value: vaccinationsHeadline,
+        color: '#80ed99',
+      });
+    }
     return values.filter((item) => item.value > 0);
   }, [
     metricData.today_cases?.headline,
     metricData.today_deaths?.headline,
-    metricData.today_vaccinations?.headline,
+    vaccinationsEnabled,
+    vaccinationsHeadline,
   ]);
 
   const splitTotal = useMemo(() => splitData.reduce((acc, item) => acc + item.value, 0), [splitData]);
@@ -288,7 +306,7 @@ const ChartsView: React.FC = () => {
     const metricValues = {
       cases: toNumeric(metricData.today_cases?.headline) || 0,
       deaths: toNumeric(metricData.today_deaths?.headline) || 0,
-      vaccinations: toNumeric(metricData.today_vaccinations?.headline) || 0,
+      vaccinations: vaccinationsHeadline,
     };
 
     const pairs: Array<Omit<PairComparison, 'leftPercent' | 'rightPercent'>> = [
@@ -308,39 +326,44 @@ const ChartsView: React.FC = () => {
           color: '#ff8a47',
         },
       },
-      {
-        key: 'cases-vaccinations',
-        title: 'Cases vs Vaccinations',
-        left: {
-          label: 'Cases',
-          metric: 'today_cases',
-          value: metricValues.cases,
-          color: '#4de0ff',
-        },
-        right: {
-          label: 'Vaccinations',
-          metric: 'today_vaccinations',
-          value: metricValues.vaccinations,
-          color: '#80ed99',
-        },
-      },
-      {
-        key: 'vaccinations-deaths',
-        title: 'Vaccinations vs Deaths',
-        left: {
-          label: 'Vaccinations',
-          metric: 'today_vaccinations',
-          value: metricValues.vaccinations,
-          color: '#80ed99',
-        },
-        right: {
-          label: 'Deaths',
-          metric: 'today_deaths',
-          value: metricValues.deaths,
-          color: '#ff8a47',
-        },
-      },
     ];
+
+    if (vaccinationsEnabled) {
+      pairs.push(
+        {
+          key: 'cases-vaccinations',
+          title: 'Cases vs Vaccinations',
+          left: {
+            label: 'Cases',
+            metric: 'today_cases',
+            value: metricValues.cases,
+            color: '#4de0ff',
+          },
+          right: {
+            label: 'Vaccinations',
+            metric: 'vaccinations_total',
+            value: metricValues.vaccinations,
+            color: '#80ed99',
+          },
+        },
+        {
+          key: 'vaccinations-deaths',
+          title: 'Vaccinations vs Deaths',
+          left: {
+            label: 'Vaccinations',
+            metric: 'vaccinations_total',
+            value: metricValues.vaccinations,
+            color: '#80ed99',
+          },
+          right: {
+            label: 'Deaths',
+            metric: 'today_deaths',
+            value: metricValues.deaths,
+            color: '#ff8a47',
+          },
+        }
+      );
+    }
 
     return pairs
       .map((pair) => {
@@ -360,7 +383,8 @@ const ChartsView: React.FC = () => {
   }, [
     metricData.today_cases?.headline,
     metricData.today_deaths?.headline,
-    metricData.today_vaccinations?.headline,
+    vaccinationsEnabled,
+    vaccinationsHeadline,
     outcomePairKey,
   ]);
 
@@ -371,9 +395,9 @@ const ChartsView: React.FC = () => {
     (): Partial<Record<SummaryMetric, Array<{ date: string; value: number | null }>>> => ({
       today_cases: casesSeries,
       today_deaths: deathsSeries,
-      today_vaccinations: vaccinationsSeries,
+      today_vaccinations: [],
       active: metricData.active?.series ?? [],
-      vaccinations_total: metricData.vaccinations_total?.series ?? [],
+      vaccinations_total: vaccinationsSeries,
       mortality: mortalitySeries,
     }),
     [
@@ -381,7 +405,6 @@ const ChartsView: React.FC = () => {
       deathsSeries,
       vaccinationsSeries,
       metricData.active?.series,
-      metricData.vaccinations_total?.series,
       mortalitySeries,
     ]
   );
@@ -394,7 +417,7 @@ const ChartsView: React.FC = () => {
         response: metricQueries[index]?.data as CountryDetailsResponse | undefined,
         loading: Boolean(metricQueries[index]?.isLoading),
       })),
-    [metricQueries]
+    [chartMetricCards, metricQueries]
   );
 
   return (
@@ -404,7 +427,7 @@ const ChartsView: React.FC = () => {
           <p className="eyebrow">Country analytics</p>
           <h1 className="title">Country Graphs</h1>
           <p className="lede">
-            Explore daily flow, weekly rhythm and outcome mix for one country in a selected day or period.
+            Explore flow, weekly rhythm and outcome mix for one country in a selected day, period, or total mode.
           </p>
         </div>
       </header>

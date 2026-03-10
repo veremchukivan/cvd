@@ -12,7 +12,7 @@ type UseMapSummaryResult = {
 };
 
 export function useMapSummary(input: UseMapSummaryInput): UseMapSummaryResult {
-  const apiMetric = mapMetricToTodayMetric(input.metric);
+  const apiMetric = mapMetricToApiMetric(input.metric, input.dateMode);
   const params: Parameters<typeof fetchSummary>[0] =
     input.dateMode === 'day'
       ? { metric: apiMetric, date: input.date }
@@ -46,10 +46,15 @@ export function useMapSummary(input: UseMapSummaryInput): UseMapSummaryResult {
   };
 }
 
-function mapMetricToTodayMetric(metric: Metric): Parameters<typeof fetchSummary>[0]['metric'] {
+function mapMetricToApiMetric(
+  metric: Metric,
+  dateMode: UseMapSummaryInput['dateMode']
+): Parameters<typeof fetchSummary>[0]['metric'] {
   if (metric === 'cases') return 'today_cases';
   if (metric === 'deaths') return 'today_deaths';
   if (metric === 'recovered') return 'today_recovered';
-  if (metric === 'vaccinations_total') return 'today_vaccinations';
+  if (metric === 'vaccinations_total') {
+    return dateMode === 'total' ? 'vaccinations_total' : 'today_vaccinations';
+  }
   return metric;
 }

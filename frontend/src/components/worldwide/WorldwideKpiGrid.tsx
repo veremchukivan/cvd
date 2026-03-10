@@ -5,7 +5,8 @@ type WorldwideKpiGridProps = {
   periodLabel: string;
   casesHeadline?: number | null;
   deathsHeadline?: number | null;
-  vaccinationsHeadline?: number | null;
+  vaccinationsTotalHeadline?: number | null;
+  showVaccinationsTotal: boolean;
   activeHeadline?: number | null;
   mortalityHeadline?: number | null;
   totalCases?: number | null;
@@ -16,7 +17,8 @@ const WorldwideKpiGrid: React.FC<WorldwideKpiGridProps> = ({
   periodLabel,
   casesHeadline,
   deathsHeadline,
-  vaccinationsHeadline,
+  vaccinationsTotalHeadline,
+  showVaccinationsTotal,
   activeHeadline,
   mortalityHeadline,
   totalCases,
@@ -33,11 +35,13 @@ const WorldwideKpiGrid: React.FC<WorldwideKpiGridProps> = ({
       <p className="world-kpi-value">{formatSummaryValue('today_deaths', deathsHeadline)}</p>
       <p className="world-kpi-hint">{periodLabel}</p>
     </div>
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">Vaccinations (daily)</p>
-      <p className="world-kpi-value">{formatSummaryValue('today_vaccinations', vaccinationsHeadline)}</p>
-      <p className="world-kpi-hint">{periodLabel}</p>
-    </div>
+    {showVaccinationsTotal ? (
+      <div className="world-kpi-card">
+        <p className="world-kpi-label">Vaccinations (total)</p>
+        <p className="world-kpi-value">{formatSummaryValue('vaccinations_total', vaccinationsTotalHeadline)}</p>
+        <p className="world-kpi-hint">{periodLabel}</p>
+      </div>
+    ) : null}
     <div className="world-kpi-card">
       <p className="world-kpi-label">Active (total)</p>
       <p className="world-kpi-value">{formatSummaryValue('active', activeHeadline)}</p>

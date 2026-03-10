@@ -26,7 +26,6 @@ type MetricOption = {
 const metricOptions: MetricOption[] = [
   { metric: 'today_cases', color: '#4de0ff', fillColor: 'rgba(77,224,255,0.16)' },
   { metric: 'today_deaths', color: '#ff8a47', fillColor: 'rgba(255,138,71,0.16)' },
-  { metric: 'today_vaccinations', color: '#80ed99', fillColor: 'rgba(128,237,153,0.16)' },
   { metric: 'active', color: '#b8c0ff', fillColor: 'rgba(184,192,255,0.16)' },
   { metric: 'vaccinations_total', color: '#2ec4b6', fillColor: 'rgba(46,196,182,0.16)' },
   { metric: 'mortality', color: '#f78fb3', fillColor: 'rgba(247,143,179,0.16)' },
@@ -78,7 +77,7 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
 
   useEffect(() => {
     setSelectedMetrics((prev) => {
-      const filtered = prev.filter((metric) => metricOptions.some((item) => item.metric === metric));
+      const filtered = prev.filter((metric) => availableMetrics.includes(metric));
       if (filtered.length) return filtered;
       return availableMetrics.slice(0, Math.min(2, availableMetrics.length));
     });
@@ -147,7 +146,8 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
             <div className="custom-chip-grid">
               {metricOptions.map((item) => {
                 const selected = selectedMetrics.includes(item.metric);
-                const disabled = !selected && selectedMetrics.length >= 3;
+                const unavailable = !availableMetrics.includes(item.metric);
+                const disabled = unavailable || (!selected && selectedMetrics.length >= 3);
                 return (
                   <button
                     key={item.metric}

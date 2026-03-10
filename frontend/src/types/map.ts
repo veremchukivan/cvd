@@ -122,10 +122,42 @@ export interface SummaryDatum {
   max?: number;
 }
 
+export interface SummaryDataQualitySource {
+  source: string;
+  latest?: string | null;
+}
+
+export interface SummaryDataQuality {
+  metrics: string[];
+  primarySource?: string | null;
+  sources?: SummaryDataQualitySource[];
+  latestByMetric?: Record<string, string | null>;
+  overallLatest?: string | null;
+}
+
+export interface SummaryAnomalyDatum {
+  isoCode: string;
+  name?: string;
+  value?: number | null;
+  score?: number | null;
+  direction?: 'high' | 'low';
+}
+
+export interface SummaryAnomalyPayload {
+  method?: string;
+  threshold?: number;
+  count?: number;
+  median?: number | null;
+  mad?: number | null;
+  items: SummaryAnomalyDatum[];
+}
+
 export interface SummaryResponse {
   data: SummaryDatum[];
   metric: SummaryMetric;
   groupBy?: GroupBy;
+  anomalies?: SummaryAnomalyPayload;
+  quality?: SummaryDataQuality;
   from: string;
   to: string;
 }

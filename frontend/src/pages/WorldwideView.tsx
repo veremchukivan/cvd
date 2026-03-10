@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { fetchCountryDetails, fetchSummary } from '../api/map';
+import { fetchCountryDetails, fetchSummary, MapSummaryParams } from '../api/map';
 import WorldwideChartsGrid from '../components/worldwide/WorldwideChartsGrid';
+import DataQualityBadge from '../components/worldwide/DataQualityBadge';
+import ExportPanel from '../components/worldwide/ExportPanel';
+import PredictiveOutlookCard from '../components/worldwide/PredictiveOutlookCard';
 import WorldwideFilters from '../components/worldwide/EnhancedFilters';
 import WorldwideKpiGrid from '../components/worldwide/WorldwideKpiGrid';
 import { buildCountryQuery, metricToSummaryMetric, quickRangeBounds } from '../lib/analytics';
@@ -54,24 +57,30 @@ const WorldwideView: React.FC = () => {
   const worldError = worldQueries.find((item) => item.error)?.error as Error | undefined;
 
   const rankSummaryMetric = metricToSummaryMetric(rankMetric);
+  const rankingParams = useMemo<MapSummaryParams>(
+    () =>
+      dateMode === 'day'
+        ? { metric: rankSummaryMetric, date, groupBy: rankGroupBy }
+        : dateMode === 'range'
+          ? { metric: rankSummaryMetric, from: range.from, to: range.to, groupBy: rankGroupBy }
+          : { metric: rankSummaryMetric, groupBy: rankGroupBy },
+    [dateMode, date, rankGroupBy, rankSummaryMetric, range.from, range.to]
+  );
   const rankingQuery = useQuery({
     queryKey: ['world-ranking', rankSummaryMetric, rankGroupBy, dateMode, date, range.from, range.to],
-    queryFn: async () => {
-      const params =
-        dateMode === 'day'
-          ? { metric: rankSummaryMetric, date, groupBy: rankGroupBy }
-          : dateMode === 'range'
-            ? { metric: rankSummaryMetric, from: range.from, to: range.to, groupBy: rankGroupBy }
-            : { metric: rankSummaryMetric, groupBy: rankGroupBy };
-      const response = await fetchSummary(params);
-      return response.data
-        .filter((item) => (rankGroupBy === 'country' ? item.isoCode?.toUpperCase() !== 'WORLD' : true))
-        .slice(0, 10);
-    },
+    queryFn: async () => fetchSummary(rankingParams),
     staleTime: 5 * 60 * 1000,
   });
 
-  const ranking = useMemo(() => rankingQuery.data ?? [], [rankingQuery.data]);
+  const ranking = useMemo(
+    () =>
+      (rankingQuery.data?.data ?? [])
+        .filter((item) => (rankGroupBy === 'country' ? item.isoCode?.toUpperCase() !== 'WORLD' : true))
+        .slice(0, 10),
+    [rankGroupBy, rankingQuery.data?.data]
+  );
+  const rankingQuality = rankingQuery.data?.quality;
+  const rankingAnomalies = rankingQuery.data?.anomalies;
   const periodLabel =
     dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
   const totals = casesData?.totals || casesData?.snapshot;
@@ -145,6 +154,21 @@ const WorldwideView: React.FC = () => {
 
       {worldError ? <div className="banner banner-error">Unable to load worldwide data.</div> : null}
 
+      <div className="world-utility-grid">
+        <ExportPanel
+          params={rankingParams}
+          periodLabel={periodLabel}
+          rankMetricLabel={rankMetricLabel}
+          rankGroupBy={rankGroupBy}
+        />
+        <DataQualityBadge quality={rankingQuality} rankGroupBy={rankGroupBy} />
+        <PredictiveOutlookCard
+          periodLabel={periodLabel}
+          casesSeries={casesData?.series}
+          deathsSeries={deathsData?.series}
+        />
+      </div>
+
       <WorldwideKpiGrid
         periodLabel={periodLabel}
         casesHeadline={casesData?.headline}
@@ -164,6 +188,7 @@ const WorldwideView: React.FC = () => {
         rankEntityLabel={rankEntityLabel}
         rankLabels={rankLabels}
         rankValues={rankValues}
+        anomalies={rankingAnomalies}
       />
     </div>
   );

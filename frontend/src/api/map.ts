@@ -20,6 +20,7 @@ export type MapSummaryParams = {
   to?: string;
   groupBy?: GroupBy;
 };
+export type SummaryExportFormat = 'csv' | 'json';
 
 export type ProvincesSummaryParams = {
   metric?: Metric;
@@ -188,6 +189,17 @@ function aggregateTodayTimeseries(
 export async function fetchCountryChart(iso: string, metric: Metric): Promise<Blob> {
   const response = await api.get('/charts/country/', {
     params: { iso, metric },
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
+export async function fetchSummaryExport(
+  params: MapSummaryParams,
+  format: SummaryExportFormat
+): Promise<Blob> {
+  const response = await api.get('/export/summary/', {
+    params: { ...params, exportFormat: format },
     responseType: 'blob',
   });
   return response.data as Blob;

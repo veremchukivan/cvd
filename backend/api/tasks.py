@@ -6,6 +6,7 @@ from api.services.ingest import (
     ingest_disease_provinces_data,
     ingest_disease_states_data,
 )
+from api.views import precompute_summary_cache as precompute_summary_cache_payloads
 
 
 @shared_task(bind=True, autoretry_for=(RuntimeError,), retry_backoff=True, retry_kwargs={"max_retries": 3})
@@ -37,3 +38,8 @@ def ingest_disease(self, lastdays: str | int = "30", province_lastdays: str | in
     ingest_disease_data()
     ingest_disease_states_data()
     ingest_disease_provinces_data(lastdays=province_lastdays)
+
+
+@shared_task(bind=True, autoretry_for=(RuntimeError,), retry_backoff=True, retry_kwargs={"max_retries": 3})
+def precompute_summary_cache(self):
+    return precompute_summary_cache_payloads()

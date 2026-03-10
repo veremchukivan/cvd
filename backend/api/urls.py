@@ -5,6 +5,7 @@ urlpatterns = [
     path("timeseries/", views.timeseries),
     path("summary/", views.summary),
     path("map/", views.map_summary),
+    path("export/summary/", views.export_summary),
     path("country/<str:iso>/", views.country_details),
     path("charts/country/", views.country_chart),
     path("sync/status/", views.sync_status),

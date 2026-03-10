@@ -1,10 +1,13 @@
+import csv
+import json
 from datetime import date
 from io import StringIO
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from api.models import Continent, DataPoint, Location, Province, ProvinceDataPoint, State, StateDataPoint
 from api.services.ingest import (
@@ -191,6 +194,16 @@ class CeleryIngestTaskTests(TestCase):
         latest_mock.assert_called_once_with()
         states_mock.assert_called_once_with()
         provinces_mock.assert_called_once_with(lastdays="all")
+
+    @patch("api.tasks.precompute_summary_cache_payloads")
+    def test_precompute_summary_cache_task_calls_cache_warmup(self, precompute_mock):
+        from api.tasks import precompute_summary_cache
+
+        precompute_mock.return_value = {"enabled": True, "warmed": 10}
+        result = precompute_summary_cache.run()
+
+        precompute_mock.assert_called_once_with()
+        self.assertEqual(result, {"enabled": True, "warmed": 10})
 
 
 class OwidBackfillCommandTests(TestCase):
@@ -607,6 +620,314 @@ class ContinentAggregationEndpointTests(TestCase):
         rows_by_iso = {item["isoCode"]: item for item in payload["data"]}
         self.assertEqual(rows_by_iso["EU"]["value"], 16.67)
         self.assertEqual(rows_by_iso["AS"]["value"], 5.0)
+
+
+class SummaryExportEndpointTests(TestCase):
+    def setUp(self):
+        self.eu = Continent.objects.create(code="EU", name="Europe")
+        self.ukr = Location.objects.create(iso_code="UKR", name="Ukraine", continent=self.eu)
+        self.pol = Location.objects.create(iso_code="POL", name="Poland", continent=self.eu)
+
+    def test_export_summary_csv_returns_attachment(self):
+        DataPoint.objects.create(
+            location=self.ukr,
+            date=date(2023, 1, 3),
+            metric="today_cases",
+            value=7,
+            source="disease.sh",
+        )
+
+        response = self.client.get(
+            "/api/v1/export/summary/",
+            {"metric": "cases", "date": "2023-01-03", "exportFormat": "csv"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment; filename=", response["Content-Disposition"])
+        decoded = response.content.decode("utf-8")
+        rows = list(csv.DictReader(decoded.splitlines()))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["isoCode"], "UKR")
+        self.assertEqual(rows[0]["value"], "7.0")
+
+    def test_export_summary_json_supports_continent_grouping(self):
+        rows = [
+            (self.ukr, date(2023, 1, 3), "cases", 100),
+            (self.ukr, date(2023, 1, 3), "deaths", 10),
+            (self.pol, date(2023, 1, 3), "cases", 200),
+            (self.pol, date(2023, 1, 3), "deaths", 20),
+        ]
+        for location, point_date, metric, value in rows:
+            DataPoint.objects.create(
+                location=location,
+                date=point_date,
+                metric=metric,
+                value=value,
+                source="disease.sh",
+            )
+
+        response = self.client.get(
+            "/api/v1/export/summary/",
+            {"metric": "mortality", "date": "2023-01-03", "groupBy": "continent", "exportFormat": "json"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment; filename=", response["Content-Disposition"])
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(payload["groupBy"], "continent")
+        rows_by_iso = {item["isoCode"]: item for item in payload["data"]}
+        self.assertEqual(rows_by_iso["EU"]["value"], 10.0)
+
+    def test_export_summary_rejects_unsupported_format(self):
+        response = self.client.get(
+            "/api/v1/export/summary/",
+            {"metric": "cases", "date": "2023-01-03", "exportFormat": "xml"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "summary-cache-tests",
+        }
+    },
+    SUMMARY_CACHE_TTL_SECONDS=300,
+    SUMMARY_CACHE_KEY_PREFIX="test:summary:v1",
+)
+class SummaryResponseCachingTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_map_endpoint_reuses_cached_payload(self):
+        expected_payload = {
+            "data": [{"isoCode": "UKR", "name": "Ukraine", "value": 7.0, "delta": None, "average": 7.0, "max": 7.0}],
+            "metric": "cases",
+            "groupBy": "country",
+            "quality": {"metrics": ["today_cases"], "primarySource": "disease.sh"},
+            "from": None,
+            "to": None,
+            "date": "2023-01-03",
+        }
+        with patch("api.views._build_map_summary_payload", return_value=expected_payload) as build_mock:
+            first = self.client.get("/api/v1/map/", {"metric": "cases", "date": "2023-01-03"})
+            second = self.client.get("/api/v1/map/", {"metric": "cases", "date": "2023-01-03"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), expected_payload)
+        self.assertEqual(second.json(), expected_payload)
+        self.assertEqual(build_mock.call_count, 1)
+
+    def test_summary_endpoint_reuses_cached_payload(self):
+        expected_payload = {
+            "data": [{"isoCode": "EU", "name": "Europe", "value": 12.0, "delta": 12.0, "average": 12.0, "max": 12.0}],
+            "metric": "deaths",
+            "groupBy": "continent",
+            "quality": {"metrics": ["deaths"], "primarySource": "disease.sh"},
+            "from": "2023-01-01",
+            "to": "2023-01-03",
+        }
+        with patch("api.views._build_summary_payload", return_value=expected_payload) as build_mock:
+            first = self.client.get(
+                "/api/v1/summary/",
+                {"metric": "deaths", "from": "2023-01-01", "to": "2023-01-03", "groupBy": "continent"},
+            )
+            second = self.client.get(
+                "/api/v1/summary/",
+                {"metric": "deaths", "from": "2023-01-01", "to": "2023-01-03", "groupBy": "continent"},
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), expected_payload)
+        self.assertEqual(second.json(), expected_payload)
+        self.assertEqual(build_mock.call_count, 1)
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "summary-precompute-tests",
+        }
+    },
+    SUMMARY_CACHE_TTL_SECONDS=300,
+    SUMMARY_CACHE_KEY_PREFIX="test:summary:precompute",
+    SUMMARY_PRECOMPUTE_METRICS=("cases", "mortality"),
+    SUMMARY_PRECOMPUTE_GROUP_BY=("country", "continent"),
+    SUMMARY_PRECOMPUTE_RANGE_DAYS=7,
+)
+class SummaryCachePrecomputeTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        location = Location.objects.create(iso_code="UKR", name="Ukraine")
+        rows = [
+            (date(2023, 1, 2), "cases", 100),
+            (date(2023, 1, 3), "cases", 120),
+            (date(2023, 1, 2), "deaths", 4),
+            (date(2023, 1, 3), "deaths", 6),
+            (date(2023, 1, 3), "today_cases", 20),
+        ]
+        for point_date, metric, value in rows:
+            DataPoint.objects.create(
+                location=location,
+                date=point_date,
+                metric=metric,
+                value=value,
+                source="disease.sh",
+            )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_precompute_summary_cache_warms_all_variants(self):
+        from api.views import precompute_summary_cache
+
+        result = precompute_summary_cache()
+
+        self.assertTrue(result["enabled"])
+        self.assertEqual(result["metrics"], ["cases", "mortality"])
+        self.assertEqual(result["groups"], ["country", "continent"])
+        self.assertEqual(result["rangeDays"], 7)
+        self.assertEqual(result["latestDate"], "2023-01-03")
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["warmed"], 20)
+
+
+class DataQualityPayloadTests(TestCase):
+    def setUp(self):
+        self.location = Location.objects.create(iso_code="UKR", name="Ukraine")
+
+    def test_map_summary_includes_quality_for_cases(self):
+        DataPoint.objects.create(
+            location=self.location,
+            date=date(2023, 1, 3),
+            metric="today_cases",
+            value=7,
+            source="disease.sh",
+        )
+
+        response = self.client.get("/api/v1/map/", {"metric": "cases", "date": "2023-01-03"})
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        quality = payload["quality"]
+        self.assertEqual(quality["metrics"], ["today_cases"])
+        self.assertEqual(quality["primarySource"], "disease.sh")
+        self.assertEqual(quality["overallLatest"], "2023-01-03")
+        self.assertEqual(quality["latestByMetric"]["today_cases"], "2023-01-03")
+
+    def test_map_summary_includes_quality_for_mortality(self):
+        rows = [
+            (date(2023, 1, 3), "cases", 100, "disease.sh"),
+            (date(2023, 1, 3), "deaths", 5, "owid"),
+        ]
+        for point_date, metric, value, source in rows:
+            DataPoint.objects.create(
+                location=self.location,
+                date=point_date,
+                metric=metric,
+                value=value,
+                source=source,
+            )
+
+        response = self.client.get("/api/v1/map/", {"metric": "mortality", "date": "2023-01-03"})
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        quality = payload["quality"]
+        self.assertEqual(quality["metrics"], ["cases", "deaths"])
+        self.assertEqual(quality["overallLatest"], "2023-01-03")
+        self.assertEqual(quality["latestByMetric"]["cases"], "2023-01-03")
+        self.assertEqual(quality["latestByMetric"]["deaths"], "2023-01-03")
+
+    def test_summary_includes_quality_metadata(self):
+        DataPoint.objects.create(
+            location=self.location,
+            date=date(2023, 1, 2),
+            metric="active",
+            value=11,
+            source="disease.sh",
+        )
+        response = self.client.get(
+            "/api/v1/summary/",
+            {"metric": "active", "from": "2023-01-01", "to": "2023-01-03"},
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["quality"]["metrics"], ["active"])
+        self.assertEqual(payload["quality"]["primarySource"], "disease.sh")
+
+
+class AnomalyDetectionPayloadTests(TestCase):
+    def test_map_summary_detects_outlier_country(self):
+        countries = [
+            ("UKR", "Ukraine", 10),
+            ("POL", "Poland", 11),
+            ("DEU", "Germany", 12),
+            ("CZE", "Czechia", 9),
+            ("SVK", "Slovakia", 13),
+            ("USA", "United States", 250),
+        ]
+        for iso, name, value in countries:
+            location = Location.objects.create(iso_code=iso, name=name)
+            DataPoint.objects.create(
+                location=location,
+                date=date(2023, 1, 3),
+                metric="today_cases",
+                value=value,
+                source="disease.sh",
+            )
+
+        response = self.client.get("/api/v1/map/", {"metric": "cases", "date": "2023-01-03"})
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("anomalies", payload)
+        self.assertEqual(payload["anomalies"]["method"], "robust_zscore")
+        self.assertEqual(payload["anomalies"]["count"], 1)
+        self.assertEqual(payload["anomalies"]["items"][0]["isoCode"], "USA")
+        self.assertEqual(payload["anomalies"]["items"][0]["direction"], "high")
+
+    def test_summary_anomalies_empty_for_small_sample(self):
+        countries = [
+            ("UKR", "Ukraine", 100, 120),
+            ("POL", "Poland", 150, 170),
+            ("DEU", "Germany", 90, 95),
+        ]
+        for iso, name, start_value, end_value in countries:
+            location = Location.objects.create(iso_code=iso, name=name)
+            DataPoint.objects.create(
+                location=location,
+                date=date(2023, 1, 1),
+                metric="cases",
+                value=start_value,
+                source="disease.sh",
+            )
+            DataPoint.objects.create(
+                location=location,
+                date=date(2023, 1, 3),
+                metric="cases",
+                value=end_value,
+                source="disease.sh",
+            )
+
+        response = self.client.get(
+            "/api/v1/summary/",
+            {"metric": "cases", "from": "2023-01-01", "to": "2023-01-03"},
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("anomalies", payload)
+        self.assertEqual(payload["anomalies"]["count"], 0)
+        self.assertEqual(payload["anomalies"]["items"], [])
 
 
 class CountryDetailsPanelPayloadTests(TestCase):

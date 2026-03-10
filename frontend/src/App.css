@@ -1305,6 +1305,99 @@
   font-size: 12px;
 }
 
+.world-utility-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.world-export-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.world-export-hint {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.world-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.world-export-actions .pill:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.world-export-error {
+  margin: 10px 0 0;
+  color: #ffd7d1;
+  font-size: 12px;
+}
+
+.world-quality-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.world-predict-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.world-predict-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.world-predict-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.world-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.world-quality-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.world-quality-value {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.world-quality-metrics {
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .world-chart-grid {
   margin-top: 16px;
   display: grid;
@@ -1482,6 +1575,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .world-quality-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .world-predict-grid {
+    grid-template-columns: 1fr;
+  }
+
   .world-chart-grid {
     grid-template-columns: 1fr;
   }
@@ -1595,6 +1696,10 @@
   }
 
   .world-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .world-utility-grid {
     grid-template-columns: 1fr;
   }
 

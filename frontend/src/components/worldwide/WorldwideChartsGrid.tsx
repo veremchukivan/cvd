@@ -1,5 +1,7 @@
 import React from 'react';
 import Plot from '../common/Plot';
+import AnomalyDetectionChart from './AnomalyDetectionChart';
+import { SummaryAnomalyPayload } from '../../types/map';
 
 type WorldwideChartsGridProps = {
   timelineChartData: Array<Record<string, unknown>>;
@@ -9,6 +11,7 @@ type WorldwideChartsGridProps = {
   rankEntityLabel: string;
   rankLabels: string[];
   rankValues: number[];
+  anomalies?: SummaryAnomalyPayload;
 };
 
 const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
@@ -19,6 +22,7 @@ const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
   rankEntityLabel,
   rankLabels,
   rankValues,
+  anomalies,
 }) => (
   <div className="world-chart-grid">
     <div className="world-chart-card">
@@ -87,6 +91,12 @@ const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
         <div className="chart-placeholder">No ranking data for selected settings.</div>
       )}
     </div>
+
+    <AnomalyDetectionChart
+      anomalies={anomalies}
+      rankMetricLabel={rankMetricLabel}
+      rankEntityLabel={rankEntityLabel}
+    />
   </div>
 );
 

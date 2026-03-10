@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -6,6 +7,16 @@ from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+RUNNING_TESTS = "test" in sys.argv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -86,6 +97,40 @@ REST_FRAMEWORK = {
 # Allow local frontend (webpack dev server) to call the API
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
+# API summary/map cache
+CACHE_URL = "" if RUNNING_TESTS else os.getenv("CACHE_URL", os.getenv("REDIS_URL", "")).strip()
+if CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "covid-local-cache",
+        }
+    }
+
+SUMMARY_CACHE_TTL_SECONDS = _env_int("SUMMARY_CACHE_TTL_SECONDS", 0 if RUNNING_TESTS else 300)
+SUMMARY_CACHE_KEY_PREFIX = os.getenv("SUMMARY_CACHE_KEY_PREFIX", "covid:summary:v1")
+SUMMARY_PRECOMPUTE_METRICS = tuple(
+    item.strip().lower()
+    for item in os.getenv(
+        "SUMMARY_PRECOMPUTE_METRICS",
+        "cases,deaths,mortality,active,vaccinations_total",
+    ).split(",")
+    if item.strip()
+)
+SUMMARY_PRECOMPUTE_GROUP_BY = tuple(
+    item.strip().lower()
+    for item in os.getenv("SUMMARY_PRECOMPUTE_GROUP_BY", "country,continent").split(",")
+    if item.strip()
+)
+SUMMARY_PRECOMPUTE_RANGE_DAYS = max(_env_int("SUMMARY_PRECOMPUTE_RANGE_DAYS", 30), 1)
+
 # Celery / task scheduling
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
@@ -113,5 +158,9 @@ CELERY_BEAT_SCHEDULE = {
         "task": "api.tasks.ingest_disease",
         "schedule": crontab(minute=45, hour=4, day_of_week="sun"),
         "kwargs": {"lastdays": "all", "province_lastdays": "all"},
+    },
+    "precompute-summary-cache-hourly": {
+        "task": "api.tasks.precompute_summary_cache",
+        "schedule": crontab(minute=5, hour="*"),
     },
 }

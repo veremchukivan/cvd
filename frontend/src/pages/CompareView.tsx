@@ -242,16 +242,6 @@ const CompareView: React.FC = () => {
 
       {mainError ? <div className="banner banner-error">Unable to load comparison data.</div> : null}
 
-      <CompareSummaryGrid
-        summaryMetric={summaryMetric}
-        primaryName={primaryName}
-        primaryHeadline={primaryDetails?.headline}
-        compareName={compareName}
-        compareIso={compareIso}
-        compareHeadline={compareDetails?.headline}
-        periodLabel={periodLabel}
-      />
-
       <CompareTrendChart
         metric={summaryMetric}
         primary={primaryDetails}
@@ -263,6 +253,16 @@ const CompareView: React.FC = () => {
         primaryName={primaryName}
         secondaryName={compareName}
         loading={mainLoading || extraLoading}
+      />
+
+      <CompareSummaryGrid
+        summaryMetric={summaryMetric}
+        primaryName={primaryName}
+        primaryHeadline={primaryDetails?.headline}
+        compareName={compareName}
+        compareIso={compareIso}
+        compareHeadline={compareDetails?.headline}
+        periodLabel={periodLabel}
       />
     </div>
   );

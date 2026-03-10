@@ -4,6 +4,8 @@ import MapView from './pages/MapView';
 import ChartsView from './pages/ChartsView';
 import CompareView from './pages/CompareView';
 import WorldwideView from './pages/WorldwideView';
+import AboutView from './pages/AboutView';
+import FaqView from './pages/FaqView';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -16,13 +18,20 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const [view, setView] = React.useState<'map' | 'charts' | 'compare' | 'worldwide'>('map');
+  const [view, setView] = React.useState<
+    'map' | 'charts' | 'compare' | 'worldwide' | 'about' | 'faq'
+  >('map');
 
-  const navItems: Array<{ id: 'map' | 'charts' | 'compare' | 'worldwide'; label: string }> = [
+  const navItems: Array<{
+    id: 'map' | 'charts' | 'compare' | 'worldwide' | 'about' | 'faq';
+    label: string;
+  }> = [
     { id: 'map', label: 'Map' },
     { id: 'worldwide', label: 'COVID Worldwide' },
     { id: 'charts', label: 'Graphs' },
     { id: 'compare', label: 'Compare countries' },
+    { id: 'about', label: 'About' },
+    { id: 'faq', label: 'FAQ' },
   ];
 
   return (
@@ -50,6 +59,8 @@ function App() {
             {view === 'worldwide' ? <WorldwideView /> : null}
             {view === 'charts' ? <ChartsView /> : null}
             {view === 'compare' ? <CompareView /> : null}
+            {view === 'about' ? <AboutView /> : null}
+            {view === 'faq' ? <FaqView /> : null}
           </main>
         </div>
       </div>

@@ -7,6 +7,7 @@ import ChartsComparisonsSection, {
   SplitMetricDatum,
   SplitMetricShare,
 } from '../components/charts/ChartsComparisonsSection';
+import ChartsCustomSection from '../components/charts/ChartsCustomSection';
 import ChartsDynamicsSection, {
   MomentumPoint,
   WeekdayProfilePoint,
@@ -366,6 +367,24 @@ const ChartsView: React.FC = () => {
   const casesPeak = findPeak(casesSeries);
   const deathsPeak = findPeak(deathsSeries);
   const mortalityPeak = findPeak(mortalitySeries);
+  const customSeriesByMetric = useMemo(
+    (): Partial<Record<SummaryMetric, Array<{ date: string; value: number | null }>>> => ({
+      today_cases: casesSeries,
+      today_deaths: deathsSeries,
+      today_vaccinations: vaccinationsSeries,
+      active: metricData.active?.series ?? [],
+      vaccinations_total: metricData.vaccinations_total?.series ?? [],
+      mortality: mortalitySeries,
+    }),
+    [
+      casesSeries,
+      deathsSeries,
+      vaccinationsSeries,
+      metricData.active?.series,
+      metricData.vaccinations_total?.series,
+      mortalitySeries,
+    ]
+  );
 
   const metricCards = useMemo(
     () =>
@@ -421,6 +440,8 @@ const ChartsView: React.FC = () => {
         deathsPeak={deathsPeak}
         mortalityPeak={mortalityPeak}
       />
+
+      <ChartsCustomSection selectedCountryName={selectedCountryName} seriesByMetric={customSeriesByMetric} />
 
       <ChartsMetricCardsSection selectedCountryName={selectedCountryName} cards={metricCards} />
 

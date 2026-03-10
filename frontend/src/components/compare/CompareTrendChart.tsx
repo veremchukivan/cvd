@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Plot from '../common/Plot';
 import { summaryMetricLabel } from '../../lib/analytics';
 import { CountryDetailsResponse, SummaryMetric } from '../../types/map';
@@ -18,6 +18,9 @@ type CompareTrendChartProps = {
 
 type SeriesPoint = { date: string; value: number | null };
 type AlignedPoint = { date: string; primary: number | null; secondary: number | null };
+type CompareVariable = 'selected' | 'vaccinations' | 'mortality';
+type CompareView = 'overlay' | 'gap' | 'ratio' | 'normalized' | 'share';
+type CompareStyle = 'line' | 'area' | 'bar';
 
 function toNumeric(value: number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
@@ -90,6 +93,59 @@ function buildCrossMetricScatterPoints(xSeries: SeriesPoint[], ySeries: SeriesPo
     .filter((item) => item.x !== null && item.y !== null);
 }
 
+function computeRatioValues(points: AlignedPoint[], asCumulative: boolean): Array<number | null> {
+  let runningPrimary = 0;
+  let runningSecondary = 0;
+  return points.map((item) => {
+    if (item.primary === null || item.secondary === null) return null;
+    if (asCumulative) {
+      runningPrimary += Math.max(item.primary, 0);
+      runningSecondary += Math.max(item.secondary, 0);
+      return runningSecondary > 0 ? runningPrimary / runningSecondary : null;
+    }
+    return item.secondary !== 0 ? item.primary / item.secondary : null;
+  });
+}
+
+function buildSeriesTrace({
+  dates,
+  values,
+  style,
+  name,
+  color,
+  fillColor,
+  dash,
+}: {
+  dates: string[];
+  values: Array<number | null>;
+  style: CompareStyle;
+  name: string;
+  color: string;
+  fillColor: string;
+  dash?: string;
+}) {
+  if (style === 'bar') {
+    return {
+      x: dates,
+      y: values,
+      type: 'bar',
+      name,
+      marker: { color },
+      opacity: 0.78,
+    };
+  }
+  return {
+    x: dates,
+    y: values,
+    type: 'scatter',
+    mode: 'lines',
+    name,
+    line: { color, width: 2.3, dash },
+    fill: style === 'area' ? 'tozeroy' : undefined,
+    fillcolor: style === 'area' ? fillColor : undefined,
+  };
+}
+
 const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   metric,
   primary,
@@ -118,10 +174,16 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
     [secondaryMortality?.series]
   );
 
-  const aligned = useMemo(() => alignTwoSeries(primarySeries, secondarySeries), [primarySeries, secondarySeries]);
+  const [customVariable, setCustomVariable] = useState<CompareVariable>('selected');
+  const [customView, setCustomView] = useState<CompareView>('overlay');
+  const [customStyle, setCustomStyle] = useState<CompareStyle>('line');
+  const [showPrimarySeries, setShowPrimarySeries] = useState(true);
+  const [showSecondarySeries, setShowSecondarySeries] = useState(true);
 
+  const aligned = useMemo(() => alignTwoSeries(primarySeries, secondarySeries), [primarySeries, secondarySeries]);
   const hasOverlappingSeries = aligned.some((item) => item.primary !== null && item.secondary !== null);
   const alignedDates = aligned.map((item) => item.date);
+
   const isFlowMetric =
     metric === 'today_cases' ||
     metric === 'today_deaths' ||
@@ -133,18 +195,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
       ? Number((item.primary - item.secondary).toFixed(2))
       : null
   );
-  let runningPrimary = 0;
-  let runningSecondary = 0;
-  const ratioValues = aligned.map((item) => {
-    if (isFlowMetric) {
-      runningPrimary += Math.max(item.primary ?? 0, 0);
-      runningSecondary += Math.max(item.secondary ?? 0, 0);
-      return runningSecondary > 0 ? runningPrimary / runningSecondary : null;
-    }
-    return item.primary !== null && item.secondary !== null && item.secondary !== 0
-      ? item.primary / item.secondary
-      : null;
-  });
+  const ratioValues = computeRatioValues(aligned, isFlowMetric);
   const shareValues = aligned.map((item) => {
     if (item.primary === null || item.secondary === null) return null;
     const total = item.primary + item.secondary;
@@ -154,6 +205,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
 
   const normalizedPrimary = normalizeToBase100(aligned.map((item) => item.primary));
   const normalizedSecondary = normalizeToBase100(aligned.map((item) => item.secondary));
+
   const headlineRatio = useMemo(() => {
     const primaryHeadline = toNumeric(primary?.headline);
     const secondaryHeadline = toNumeric(secondary?.headline);
@@ -164,76 +216,312 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   }, [primary?.headline, secondary?.headline]);
   const headlineRatioLabel = formatRatioValue(headlineRatio);
 
-  const traces = [
-    primarySeries.length
-      ? {
-          x: primarySeries.map((point: SeriesPoint) => point.date),
-          y: primarySeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'scatter' as const,
-          mode: 'lines',
-          name: primaryName || primary?.name || 'Primary',
-          line: { color: '#4de0ff', width: 2.4 },
-        }
-      : null,
-    secondarySeries.length
-      ? {
-          x: secondarySeries.map((point: SeriesPoint) => point.date),
-          y: secondarySeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'scatter' as const,
-          mode: 'lines',
-          name: secondaryName || secondary?.name || 'Compare',
-          line: { color: '#ff8a47', width: 2.4 },
-        }
-      : null,
-  ].filter((trace): trace is NonNullable<typeof trace> => Boolean(trace));
+  const customMeta = useMemo(() => {
+    if (customVariable === 'vaccinations') {
+      return {
+        label: 'Vaccinations (daily)',
+        isFlow: true,
+        primary: primaryVaccinationsSeries,
+        secondary: secondaryVaccinationsSeries,
+        primaryColor: '#80ed99',
+        secondaryColor: '#2ec4b6',
+        primaryFill: 'rgba(128,237,153,0.16)',
+        secondaryFill: 'rgba(46,196,182,0.16)',
+      };
+    }
+    if (customVariable === 'mortality') {
+      return {
+        label: 'Mortality (%)',
+        isFlow: false,
+        primary: primaryMortalitySeries,
+        secondary: secondaryMortalitySeries,
+        primaryColor: '#f78fb3',
+        secondaryColor: '#f9a8d4',
+        primaryFill: 'rgba(247,143,179,0.16)',
+        secondaryFill: 'rgba(249,168,212,0.16)',
+      };
+    }
+    return {
+      label: summaryMetricLabel(metric),
+      isFlow: isFlowMetric,
+      primary: primarySeries,
+      secondary: secondarySeries,
+      primaryColor: '#4de0ff',
+      secondaryColor: '#ff8a47',
+      primaryFill: 'rgba(77,224,255,0.16)',
+      secondaryFill: 'rgba(255,138,71,0.16)',
+    };
+  }, [
+    customVariable,
+    isFlowMetric,
+    metric,
+    primaryMortalitySeries,
+    primarySeries,
+    primaryVaccinationsSeries,
+    secondaryMortalitySeries,
+    secondarySeries,
+    secondaryVaccinationsSeries,
+  ]);
 
-  const vaccinationTraces = [
-    primaryVaccinationsSeries.length
-      ? {
-          x: primaryVaccinationsSeries.map((point: SeriesPoint) => point.date),
-          y: primaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'scatter' as const,
-          mode: 'lines',
-          name: primaryName || primary?.name || 'Primary',
-          line: { color: '#80ed99', width: 2.2 },
-          fill: 'tozeroy',
-          fillcolor: 'rgba(128,237,153,0.14)',
-        }
-      : null,
-    secondaryVaccinationsSeries.length
-      ? {
-          x: secondaryVaccinationsSeries.map((point: SeriesPoint) => point.date),
-          y: secondaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'scatter' as const,
-          mode: 'lines',
-          name: secondaryName || secondary?.name || 'Compare',
-          line: { color: '#2ec4b6', width: 2.2 },
-        }
-      : null,
-  ].filter((trace): trace is NonNullable<typeof trace> => Boolean(trace));
+  const customAligned = useMemo(
+    () => alignTwoSeries(customMeta.primary, customMeta.secondary),
+    [customMeta.primary, customMeta.secondary]
+  );
+  const customDates = customAligned.map((item) => item.date);
+  const customPrimaryValues = customAligned.map((item) => item.primary);
+  const customSecondaryValues = customAligned.map((item) => item.secondary);
+  const customHasOverlap = customAligned.some((item) => item.primary !== null && item.secondary !== null);
 
-  const mortalityTraces = [
-    primaryMortalitySeries.length
-      ? {
-          x: primaryMortalitySeries.map((point: SeriesPoint) => point.date),
-          y: primaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'bar' as const,
-          name: primaryName || primary?.name || 'Primary',
-          marker: { color: 'rgba(255,138,71,0.7)' },
-          opacity: 0.75,
-        }
-      : null,
-    secondaryMortalitySeries.length
-      ? {
-          x: secondaryMortalitySeries.map((point: SeriesPoint) => point.date),
-          y: secondaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
-          type: 'scatter' as const,
+  const customDifferenceValues = customAligned.map((item) =>
+    item.primary !== null && item.secondary !== null
+      ? Number((item.primary - item.secondary).toFixed(2))
+      : null
+  );
+  const customRatioValues = useMemo(
+    () => computeRatioValues(customAligned, customMeta.isFlow),
+    [customAligned, customMeta.isFlow]
+  );
+  const customShareValues = customAligned.map((item) => {
+    if (item.primary === null || item.secondary === null) return null;
+    const total = item.primary + item.secondary;
+    if (total <= 0) return null;
+    return Number(((item.primary / total) * 100).toFixed(2));
+  });
+  const customNormalizedPrimary = normalizeToBase100(customPrimaryValues);
+  const customNormalizedSecondary = normalizeToBase100(customSecondaryValues);
+
+  const includePrimary = customView === 'overlay' || customView === 'normalized' ? showPrimarySeries : true;
+  const includeSecondary = customView === 'overlay' || customView === 'normalized' ? showSecondarySeries : true;
+
+  const customTraces = useMemo(() => {
+    const primaryLabel = primaryName || primary?.name || 'Primary';
+    const secondaryLabel = secondaryName || secondary?.name || 'Compare';
+
+    if (customView === 'overlay') {
+      const traces: Array<Record<string, unknown>> = [];
+      if (includePrimary) {
+        traces.push(
+          buildSeriesTrace({
+            dates: customDates,
+            values: customPrimaryValues,
+            style: customStyle,
+            name: primaryLabel,
+            color: customMeta.primaryColor,
+            fillColor: customMeta.primaryFill,
+          })
+        );
+      }
+      if (includeSecondary) {
+        traces.push(
+          buildSeriesTrace({
+            dates: customDates,
+            values: customSecondaryValues,
+            style: customStyle,
+            name: secondaryLabel,
+            color: customMeta.secondaryColor,
+            fillColor: customMeta.secondaryFill,
+            dash: customStyle === 'bar' ? undefined : 'dot',
+          })
+        );
+      }
+      return traces;
+    }
+
+    if (customView === 'gap') {
+      if (!customHasOverlap) return [];
+      if (customStyle === 'bar') {
+        return [
+          {
+            x: customDates,
+            y: customDifferenceValues,
+            type: 'bar',
+            name: 'Gap',
+            marker: {
+              color: customDifferenceValues.map((value) =>
+                value === null ? '#334155' : value >= 0 ? '#4de0ff' : '#ff8a47'
+              ),
+            },
+            hovertemplate: '%{x}<br>Gap: %{y}<extra></extra>',
+          },
+        ];
+      }
+      return [
+        buildSeriesTrace({
+          dates: customDates,
+          values: customDifferenceValues,
+          style: customStyle,
+          name: 'Gap',
+          color: '#38bdf8',
+          fillColor: 'rgba(56,189,248,0.16)',
+        }),
+        {
+          x: customDates,
+          y: customDates.map(() => 0),
+          type: 'scatter',
           mode: 'lines',
-          name: secondaryName || secondary?.name || 'Compare',
-          line: { color: '#f78fb3', width: 2.3 },
-        }
-      : null,
-  ].filter((trace): trace is NonNullable<typeof trace> => Boolean(trace));
+          name: 'Zero',
+          line: { color: '#64748b', width: 1.3, dash: 'dash' },
+          hoverinfo: 'skip',
+        },
+      ];
+    }
+
+    if (customView === 'ratio') {
+      if (!customHasOverlap) return [];
+      if (customStyle === 'bar') {
+        return [
+          {
+            x: customDates,
+            y: customRatioValues,
+            type: 'bar',
+            name: 'Ratio',
+            marker: { color: '#a78bfa' },
+          },
+          {
+            x: customDates,
+            y: customDates.map(() => 1),
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Parity',
+            line: { color: '#64748b', width: 1.2, dash: 'dash' },
+            hoverinfo: 'skip',
+          },
+        ];
+      }
+      return [
+        buildSeriesTrace({
+          dates: customDates,
+          values: customRatioValues,
+          style: customStyle,
+          name: 'Ratio',
+          color: '#a78bfa',
+          fillColor: 'rgba(167,139,250,0.16)',
+        }),
+        {
+          x: customDates,
+          y: customDates.map(() => 1),
+          type: 'scatter',
+          mode: 'lines',
+          name: 'Parity',
+          line: { color: '#64748b', width: 1.2, dash: 'dash' },
+          hoverinfo: 'skip',
+        },
+      ];
+    }
+
+    if (customView === 'normalized') {
+      const traces: Array<Record<string, unknown>> = [];
+      if (includePrimary) {
+        traces.push(
+          buildSeriesTrace({
+            dates: customDates,
+            values: customNormalizedPrimary,
+            style: customStyle,
+            name: primaryLabel,
+            color: customMeta.primaryColor,
+            fillColor: customMeta.primaryFill,
+          })
+        );
+      }
+      if (includeSecondary) {
+        traces.push(
+          buildSeriesTrace({
+            dates: customDates,
+            values: customNormalizedSecondary,
+            style: customStyle,
+            name: secondaryLabel,
+            color: customMeta.secondaryColor,
+            fillColor: customMeta.secondaryFill,
+            dash: customStyle === 'bar' ? undefined : 'dot',
+          })
+        );
+      }
+      return traces;
+    }
+
+    if (!customHasOverlap) return [];
+    if (customStyle === 'bar') {
+      return [
+        {
+          x: customDates,
+          y: customShareValues,
+          type: 'bar',
+          name: 'Primary share',
+          marker: { color: '#22c55e' },
+          opacity: 0.82,
+        },
+        {
+          x: customDates,
+          y: customDates.map(() => 50),
+          type: 'scatter',
+          mode: 'lines',
+          name: 'Parity',
+          line: { color: '#64748b', width: 1.2, dash: 'dash' },
+          hoverinfo: 'skip',
+        },
+      ];
+    }
+    return [
+      buildSeriesTrace({
+        dates: customDates,
+        values: customShareValues,
+        style: customStyle,
+        name: 'Primary share',
+        color: '#22c55e',
+        fillColor: 'rgba(34,197,94,0.16)',
+      }),
+      {
+        x: customDates,
+        y: customDates.map(() => 50),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Parity',
+        line: { color: '#64748b', width: 1.2, dash: 'dash' },
+        hoverinfo: 'skip',
+      },
+    ];
+  }, [
+    customDates,
+    customDifferenceValues,
+    customHasOverlap,
+    customMeta.primaryColor,
+    customMeta.primaryFill,
+    customMeta.secondaryColor,
+    customMeta.secondaryFill,
+    customNormalizedPrimary,
+    customNormalizedSecondary,
+    customPrimaryValues,
+    customRatioValues,
+    customSecondaryValues,
+    customShareValues,
+    customStyle,
+    customView,
+    includePrimary,
+    includeSecondary,
+    primary?.name,
+    primaryName,
+    secondary?.name,
+    secondaryName,
+  ]);
+
+  const customPlotTitle = useMemo(() => {
+    if (customView === 'overlay') return `${customMeta.label} • Overlay`;
+    if (customView === 'gap') return `${customMeta.label} • Gap (Primary - Compare)`;
+    if (customView === 'ratio')
+      return `${customMeta.label} • ${customMeta.isFlow ? 'Cumulative ratio' : 'Ratio'} (Primary / Compare)`;
+    if (customView === 'normalized') return `${customMeta.label} • Normalized index`;
+    return `${customMeta.label} • Primary share (%)`;
+  }, [customMeta.isFlow, customMeta.label, customView]);
+
+  const customEmptyMessage = useMemo(() => {
+    if ((customView === 'gap' || customView === 'ratio' || customView === 'share') && !customHasOverlap) {
+      return 'Selected variable has no overlapping points for both countries.';
+    }
+    if ((customView === 'overlay' || customView === 'normalized') && !includePrimary && !includeSecondary) {
+      return 'Select at least one series (Primary or Compare).';
+    }
+    return 'No data for selected countries and chart options.';
+  }, [customHasOverlap, customView, includePrimary, includeSecondary]);
 
   const primaryCrossPoints = buildCrossMetricScatterPoints(primaryVaccinationsSeries, primaryMortalitySeries);
   const secondaryCrossPoints = buildCrossMetricScatterPoints(secondaryVaccinationsSeries, secondaryMortalitySeries);
@@ -242,31 +530,155 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   return (
     <div className="compare-chart-card">
       <div className="chart-header">
-        <p className="panel-kicker">Comparison trend • {summaryMetricLabel(metric)}</p>
-        {headlineRatioLabel ? <span className="pill pill-ghost">Headline ratio: {headlineRatioLabel}</span> : null}
-        {loading ? <span className="pill pill-ghost">Loading…</span> : null}
+        <p className="panel-kicker">Custom comparison chart</p>
+        <div className="compare-header-pills">
+          {headlineRatioLabel ? <span className="pill pill-ghost">Headline ratio: {headlineRatioLabel}</span> : null}
+          {loading ? <span className="pill pill-ghost">Loading…</span> : null}
+        </div>
       </div>
-      {traces.length ? (
+
+      <div className="compare-custom-controls">
+        <div className="compare-custom-grid">
+          <div className="compare-custom-field">
+            <label className="filter-label">Variable</label>
+            <select
+              value={customVariable}
+              onChange={(event) => setCustomVariable(event.target.value as CompareVariable)}
+              className="charts-select compare-custom-select"
+            >
+              <option value="selected">Selected metric ({summaryMetricLabel(metric)})</option>
+              <option value="vaccinations">Vaccinations (daily)</option>
+              <option value="mortality">Mortality (%)</option>
+            </select>
+          </div>
+
+          <div className="compare-custom-field">
+            <label className="filter-label">View mode</label>
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={`pill ${customView === 'overlay' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomView('overlay')}
+              >
+                Overlay
+              </button>
+              <button
+                type="button"
+                className={`pill ${customView === 'gap' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomView('gap')}
+              >
+                Gap
+              </button>
+              <button
+                type="button"
+                className={`pill ${customView === 'ratio' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomView('ratio')}
+              >
+                Ratio
+              </button>
+              <button
+                type="button"
+                className={`pill ${customView === 'normalized' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomView('normalized')}
+              >
+                Index
+              </button>
+              <button
+                type="button"
+                className={`pill ${customView === 'share' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomView('share')}
+              >
+                Share
+              </button>
+            </div>
+          </div>
+
+          <div className="compare-custom-field">
+            <label className="filter-label">Chart style</label>
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={`pill ${customStyle === 'line' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomStyle('line')}
+              >
+                Line
+              </button>
+              <button
+                type="button"
+                className={`pill ${customStyle === 'area' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomStyle('area')}
+              >
+                Area
+              </button>
+              <button
+                type="button"
+                className={`pill ${customStyle === 'bar' ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => setCustomStyle('bar')}
+              >
+                Bar
+              </button>
+            </div>
+          </div>
+
+          <div className="compare-custom-field">
+            <label className="filter-label">Series</label>
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={`pill ${showPrimarySeries ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() =>
+                  setShowPrimarySeries((current) => (current && !showSecondarySeries ? true : !current))
+                }
+              >
+                Primary
+              </button>
+              <button
+                type="button"
+                className={`pill ${showSecondarySeries ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() =>
+                  setShowSecondarySeries((current) => (current && !showPrimarySeries ? true : !current))
+                }
+              >
+                Compare
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="chart-header compare-custom-title-row">
+        <p className="panel-kicker">{customPlotTitle}</p>
+      </div>
+
+      {customTraces.length ? (
         <div className="compare-plot-frame">
           <Plot
-            data={traces}
+            data={customTraces}
             layout={{
-              height: 320,
-              margin: { l: 42, r: 12, t: 14, b: 34 },
+              height: 330,
+              margin: { l: 46, r: 12, t: 14, b: 36 },
               paper_bgcolor: 'transparent',
               plot_bgcolor: 'transparent',
               font: { color: '#e2e8f0' },
               xaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
-              yaxis: { gridcolor: '#1f2937', tickfont: { color: '#8ea0b7' } },
-              legend: { orientation: 'h', y: 1.12, x: 0 },
+              yaxis: {
+                gridcolor: '#1f2937',
+                tickfont: { color: '#8ea0b7' },
+                range: customView === 'share' ? [0, 100] : undefined,
+              },
+              legend: { orientation: 'h', y: 1.11, x: 0 },
+              barmode:
+                (customView === 'overlay' || customView === 'normalized') && customStyle === 'bar'
+                  ? 'group'
+                  : undefined,
             }}
             config={{ displayModeBar: false, responsive: true }}
             useResizeHandler
-            style={{ width: '100%', height: '320px' }}
+            style={{ width: '100%', height: '330px' }}
           />
         </div>
       ) : (
-        <div className="chart-placeholder">No data for selected countries and period.</div>
+        <div className="chart-placeholder">{customEmptyMessage}</div>
       )}
 
       <div className="compare-extra-grid">
@@ -453,10 +865,37 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           <div className="chart-header">
             <p className="panel-kicker">Vaccinations (daily) trend</p>
           </div>
-          {vaccinationTraces.length ? (
+          {primaryVaccinationsSeries.length || secondaryVaccinationsSeries.length ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
-                data={vaccinationTraces}
+                data={[
+                  ...(primaryVaccinationsSeries.length
+                    ? [
+                        {
+                          x: primaryVaccinationsSeries.map((point: SeriesPoint) => point.date),
+                          y: primaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
+                          type: 'scatter',
+                          mode: 'lines',
+                          name: primaryName || primary?.name || 'Primary',
+                          line: { color: '#80ed99', width: 2.2 },
+                          fill: 'tozeroy',
+                          fillcolor: 'rgba(128,237,153,0.14)',
+                        },
+                      ]
+                    : []),
+                  ...(secondaryVaccinationsSeries.length
+                    ? [
+                        {
+                          x: secondaryVaccinationsSeries.map((point: SeriesPoint) => point.date),
+                          y: secondaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
+                          type: 'scatter',
+                          mode: 'lines',
+                          name: secondaryName || secondary?.name || 'Compare',
+                          line: { color: '#2ec4b6', width: 2.2 },
+                        },
+                      ]
+                    : []),
+                ]}
                 layout={{
                   height: 250,
                   margin: { l: 42, r: 10, t: 10, b: 30 },
@@ -481,10 +920,35 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           <div className="chart-header">
             <p className="panel-kicker">Mortality comparison</p>
           </div>
-          {mortalityTraces.length ? (
+          {primaryMortalitySeries.length || secondaryMortalitySeries.length ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
-                data={mortalityTraces}
+                data={[
+                  ...(primaryMortalitySeries.length
+                    ? [
+                        {
+                          x: primaryMortalitySeries.map((point: SeriesPoint) => point.date),
+                          y: primaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
+                          type: 'bar',
+                          name: primaryName || primary?.name || 'Primary',
+                          marker: { color: 'rgba(255,138,71,0.7)' },
+                          opacity: 0.75,
+                        },
+                      ]
+                    : []),
+                  ...(secondaryMortalitySeries.length
+                    ? [
+                        {
+                          x: secondaryMortalitySeries.map((point: SeriesPoint) => point.date),
+                          y: secondaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
+                          type: 'scatter',
+                          mode: 'lines',
+                          name: secondaryName || secondary?.name || 'Compare',
+                          line: { color: '#f78fb3', width: 2.3 },
+                        },
+                      ]
+                    : []),
+                ]}
                 layout={{
                   height: 250,
                   margin: { l: 42, r: 10, t: 10, b: 30 },

@@ -3,7 +3,7 @@ import { formatISO, subDays } from 'date-fns';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { fetchCountryDetails, fetchSummary } from '../api/map';
 import WorldwideChartsGrid from '../components/worldwide/WorldwideChartsGrid';
-import WorldwideFilters from '../components/worldwide/WorldwideFilters';
+import WorldwideFilters from '../components/worldwide/EnhancedFilters';
 import WorldwideKpiGrid from '../components/worldwide/WorldwideKpiGrid';
 import { buildCountryQuery, metricToSummaryMetric, quickRangeBounds } from '../lib/analytics';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
@@ -133,10 +133,10 @@ const WorldwideView: React.FC = () => {
         onDateChange={setDate}
         range={range}
         onRangeChange={setRange}
+        onQuickRange={(label) => setRange(quickRangeBounds(label))}
         rankMetric={rankMetric}
         rankMetricOptions={rankMetricOptions}
         onRankMetricChange={setRankMetric}
-        onQuickRange={(label) => setRange(quickRangeBounds(label))}
       />
 
       {worldError ? <div className="banner banner-error">Unable to load worldwide data.</div> : null}

@@ -15,7 +15,12 @@ declare module 'react-simple-maps' {
     children?: React.ReactNode;
   }
 
-  export const ComposableMap: React.FC<{ projectionConfig?: Record<string, unknown>; className?: string; children?: React.ReactNode }>;
+  export const ComposableMap: React.FC<{
+    projection?: string;
+    projectionConfig?: Record<string, unknown>;
+    className?: string;
+    children?: React.ReactNode;
+  }>;
   export const Geographies: React.FC<{ geography: string | object; children: (data: { geographies: any[] }) => React.ReactNode }>;
   export const Geography: React.FC<{
     geography: any;
@@ -28,10 +33,21 @@ declare module 'react-simple-maps' {
     onMouseMove?: React.MouseEventHandler<SVGPathElement>;
     onMouseLeave?: React.MouseEventHandler<SVGPathElement>;
     onBlur?: React.FocusEventHandler<SVGPathElement>;
+    onFocus?: React.FocusEventHandler<SVGPathElement>;
     'aria-label'?: string;
     tabIndex?: number;
     role?: string;
     children?: React.ReactNode;
   }>;
   export const ZoomableGroup: React.FC<ZoomableGroupProps>;
+  export const Sphere: React.FC<{
+    id?: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+  }>;
+  export const Graticule: React.FC<{
+    stroke?: string;
+    strokeWidth?: number;
+  }>;
 }

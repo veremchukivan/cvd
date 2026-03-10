@@ -6,6 +6,7 @@ type WorldwideChartsGridProps = {
   worldLoading: boolean;
   rankingLoading: boolean;
   rankMetricLabel?: string;
+  rankEntityLabel: string;
   rankLabels: string[];
   rankValues: number[];
 };
@@ -15,6 +16,7 @@ const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
   worldLoading,
   rankingLoading,
   rankMetricLabel,
+  rankEntityLabel,
   rankLabels,
   rankValues,
 }) => (
@@ -50,7 +52,7 @@ const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
 
     <div className="world-chart-card">
       <div className="chart-header">
-        <p className="panel-kicker">Top countries • {rankMetricLabel}</p>
+        <p className="panel-kicker">Top {rankEntityLabel} • {rankMetricLabel}</p>
         {rankingLoading ? <span className="pill pill-ghost">Loading…</span> : null}
       </div>
       {rankLabels.length ? (
@@ -82,7 +84,7 @@ const WorldwideChartsGrid: React.FC<WorldwideChartsGridProps> = ({
           />
         </div>
       ) : (
-        <div className="chart-placeholder">No country ranking data for selected settings.</div>
+        <div className="chart-placeholder">No ranking data for selected settings.</div>
       )}
     </div>
   </div>

@@ -14,6 +14,7 @@ export type SummaryMetric = Metric | TodayMetric;
 export type MapMode = 'choropleth' | 'markers' | 'heatmap';
 
 export type DateMode = 'day' | 'range' | 'total';
+export type GroupBy = 'country' | 'continent';
 
 export type DateRange = {
   from: string; // ISO date (YYYY-MM-DD)
@@ -124,6 +125,7 @@ export interface SummaryDatum {
 export interface SummaryResponse {
   data: SummaryDatum[];
   metric: SummaryMetric;
+  groupBy?: GroupBy;
   from: string;
   to: string;
 }

@@ -3,6 +3,7 @@ import { aggregateTimeseries } from '../lib/aggregate';
 import {
   CountryDetailsQuery,
   CountryDetailsResponse,
+  GroupBy,
   Metric,
   ProvincesSummaryResponse,
   SummaryMetric,
@@ -17,6 +18,7 @@ export type MapSummaryParams = {
   date?: string;
   from?: string;
   to?: string;
+  groupBy?: GroupBy;
 };
 
 export type ProvincesSummaryParams = {
@@ -72,6 +74,7 @@ export async function fetchSummary(params: MapSummaryParams): Promise<SummaryRes
       return {
         data: mortality,
         metric: params.metric,
+        groupBy: params.groupBy,
         from,
         to,
       } satisfies SummaryResponse;
@@ -83,6 +86,7 @@ export async function fetchSummary(params: MapSummaryParams): Promise<SummaryRes
       return {
         data: aggregated,
         metric: params.metric,
+        groupBy: params.groupBy,
         from,
         to,
       } satisfies SummaryResponse;
@@ -94,6 +98,7 @@ export async function fetchSummary(params: MapSummaryParams): Promise<SummaryRes
     return {
       data: aggregated,
       metric: params.metric,
+      groupBy: params.groupBy,
       from,
       to,
     } satisfies SummaryResponse;

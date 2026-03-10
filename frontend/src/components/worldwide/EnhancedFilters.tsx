@@ -1,8 +1,7 @@
 import React from 'react';
 import DatePickerInput from '../filters/DatePickerInput';
 import { QuickRangeLabel } from '../../lib/analytics';
-import { DateMode, DateRange, Metric } from '../../types/map';
-import { metricOptionsForDateMode } from '../../lib/metricOptions';
+import { DateMode, DateRange, GroupBy, Metric } from '../../types/map';
 import './EnhancedFilters.css';
 
 type WorldwideFiltersProps = {
@@ -16,6 +15,8 @@ type WorldwideFiltersProps = {
   rankMetric: Metric;
   rankMetricOptions: Array<{ value: Metric; label: string }>;
   onRankMetricChange: (metric: Metric) => void;
+  rankGroupBy: GroupBy;
+  onRankGroupByChange: (groupBy: GroupBy) => void;
 };
 
 const WorldwideFilters: React.FC<WorldwideFiltersProps> = ({
@@ -29,6 +30,8 @@ const WorldwideFilters: React.FC<WorldwideFiltersProps> = ({
   rankMetric,
   rankMetricOptions,
   onRankMetricChange,
+  rankGroupBy,
+  onRankGroupByChange,
 }) => (
   <div className="worldwide-filter-shell">
     <div className="worldwide-filter-grid">
@@ -116,6 +119,18 @@ const WorldwideFilters: React.FC<WorldwideFiltersProps> = ({
               {option.label}
             </option>
           ))}
+        </select>
+      </div>
+
+      <div className="worldwide-filter-card">
+        <label className="filter-label">Ranking level</label>
+        <select
+          value={rankGroupBy}
+          onChange={(e) => onRankGroupByChange(e.target.value as GroupBy)}
+          className="filter-select"
+        >
+          <option value="country">Country</option>
+          <option value="continent">Continent</option>
         </select>
       </div>
     </div>

@@ -7,7 +7,7 @@ import WorldwideFilters from '../components/worldwide/EnhancedFilters';
 import WorldwideKpiGrid from '../components/worldwide/WorldwideKpiGrid';
 import { buildCountryQuery, metricToSummaryMetric, quickRangeBounds } from '../lib/analytics';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
-import { CountryDetailsResponse, DateMode, DateRange, Metric } from '../types/map';
+import { CountryDetailsResponse, DateMode, DateRange, GroupBy, Metric } from '../types/map';
 
 const WorldwideView: React.FC = () => {
   const today = formatISO(new Date(), { representation: 'date' });
@@ -18,6 +18,7 @@ const WorldwideView: React.FC = () => {
     to: today,
   });
   const [rankMetric, setRankMetric] = useState<Metric>('cases');
+  const [rankGroupBy, setRankGroupBy] = useState<GroupBy>('country');
   const rankMetricOptions = useMemo(() => metricOptionsForDateMode(dateMode), [dateMode]);
 
   useEffect(() => {
@@ -54,17 +55,17 @@ const WorldwideView: React.FC = () => {
 
   const rankSummaryMetric = metricToSummaryMetric(rankMetric);
   const rankingQuery = useQuery({
-    queryKey: ['world-ranking', rankSummaryMetric, dateMode, date, range.from, range.to],
+    queryKey: ['world-ranking', rankSummaryMetric, rankGroupBy, dateMode, date, range.from, range.to],
     queryFn: async () => {
       const params =
         dateMode === 'day'
-          ? { metric: rankSummaryMetric, date }
+          ? { metric: rankSummaryMetric, date, groupBy: rankGroupBy }
           : dateMode === 'range'
-            ? { metric: rankSummaryMetric, from: range.from, to: range.to }
-            : { metric: rankSummaryMetric };
+            ? { metric: rankSummaryMetric, from: range.from, to: range.to, groupBy: rankGroupBy }
+            : { metric: rankSummaryMetric, groupBy: rankGroupBy };
       const response = await fetchSummary(params);
       return response.data
-        .filter((item) => item.isoCode?.toUpperCase() !== 'WORLD')
+        .filter((item) => (rankGroupBy === 'country' ? item.isoCode?.toUpperCase() !== 'WORLD' : true))
         .slice(0, 10);
     },
     staleTime: 5 * 60 * 1000,
@@ -113,6 +114,7 @@ const WorldwideView: React.FC = () => {
   const rankLabels = useMemo(() => ranking.map((item) => item.name || item.isoCode), [ranking]);
   const rankValues = useMemo(() => ranking.map((item) => item.value ?? 0), [ranking]);
   const rankMetricLabel = rankMetricOptions.find((m) => m.value === rankMetric)?.label;
+  const rankEntityLabel = rankGroupBy === 'continent' ? 'continents' : 'countries';
 
   return (
     <div className="page world-page">
@@ -137,6 +139,8 @@ const WorldwideView: React.FC = () => {
         rankMetric={rankMetric}
         rankMetricOptions={rankMetricOptions}
         onRankMetricChange={setRankMetric}
+        rankGroupBy={rankGroupBy}
+        onRankGroupByChange={setRankGroupBy}
       />
 
       {worldError ? <div className="banner banner-error">Unable to load worldwide data.</div> : null}
@@ -157,6 +161,7 @@ const WorldwideView: React.FC = () => {
         worldLoading={worldLoading}
         rankingLoading={rankingQuery.isLoading}
         rankMetricLabel={rankMetricLabel}
+        rankEntityLabel={rankEntityLabel}
         rankLabels={rankLabels}
         rankValues={rankValues}
       />

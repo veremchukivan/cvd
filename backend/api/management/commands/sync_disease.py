@@ -1,11 +1,8 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from api.services.ingest import (
-    ingest_disease_data,
-    ingest_disease_historical,
-    ingest_disease_provinces_data,
-    ingest_disease_states_data,
-)
+from api.tasks import ingest_disease as ingest_disease_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
@@ -44,61 +41,29 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        run_historical = not options.get("skip_historical")
-        run_latest = not options.get("skip_latest")
-        run_states = not options.get("skip_states")
-        run_provinces = not options.get("skip_provinces")
+        skip_historical = bool(options.get("skip_historical"))
+        skip_latest = bool(options.get("skip_latest"))
+        skip_states = bool(options.get("skip_states"))
+        skip_provinces = bool(options.get("skip_provinces"))
         lastdays = options.get("lastdays") or "all"
         province_lastdays = options.get("province_lastdays") or "all"
 
-        if not run_historical and not run_latest and not run_states and not run_provinces:
+        if skip_historical and skip_latest and skip_states and skip_provinces:
             raise CommandError(
                 "Nothing to run: all skip flags were provided."
             )
 
-        total_locations = 0
-        total_points = 0
-        phase_messages: list[str] = []
-
-        if run_historical:
-            try:
-                locations, points = ingest_disease_historical(lastdays=lastdays)
-            except RuntimeError as exc:
-                raise CommandError(f"Historical sync failed: {exc}") from exc
-            total_locations += locations
-            total_points += points
-            phase_messages.append(f"historical={locations} locations, {points} points")
-
-        if run_latest:
-            try:
-                locations, points = ingest_disease_data()
-            except RuntimeError as exc:
-                raise CommandError(f"Latest snapshot sync failed: {exc}") from exc
-            total_locations += locations
-            total_points += points
-            phase_messages.append(f"latest={locations} locations, {points} points")
-
-        if run_states:
-            try:
-                states, points = ingest_disease_states_data()
-            except RuntimeError as exc:
-                raise CommandError(f"States sync failed: {exc}") from exc
-            total_locations += states
-            total_points += points
-            phase_messages.append(f"states={states} states, {points} points")
-
-        if run_provinces:
-            try:
-                provinces, points = ingest_disease_provinces_data(lastdays=province_lastdays)
-            except RuntimeError as exc:
-                raise CommandError(f"Provinces sync failed: {exc}") from exc
-            total_locations += provinces
-            total_points += points
-            phase_messages.append(f"provinces={provinces} provinces, {points} points")
-
-        phases = "; ".join(phase_messages)
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Sync complete: {phases}. Total affected locations={total_locations}, total records={total_points}."
-            )
+        queue_task(
+            task=ingest_disease_task,
+            label="disease.sh sync",
+            stdout=self.stdout,
+            style=self.style,
+            kwargs={
+                "lastdays": lastdays,
+                "province_lastdays": province_lastdays,
+                "skip_historical": skip_historical,
+                "skip_latest": skip_latest,
+                "skip_states": skip_states,
+                "skip_provinces": skip_provinces,
+            },
         )

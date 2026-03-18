@@ -2,7 +2,10 @@ from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
 
-from api.services.ingest import OWID_CSV_URL, ingest_owid_backfill
+from api.services.ingest import OWID_CSV_URL
+from api.tasks import ingest_owid_backfill as ingest_owid_backfill_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
@@ -40,20 +43,17 @@ class Command(BaseCommand):
         source = options.get("source") or "disease.sh"
         csv_url = options.get("csv_url")
 
-        try:
-            locations, points = ingest_owid_backfill(
-                from_date=from_date,
-                to_date=to_date,
-                source=source,
-                csv_url=csv_url or OWID_CSV_URL,
-            )
-        except RuntimeError as exc:
-            raise CommandError(str(exc)) from exc
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"OWID backfill updated: {locations} affected locations, {points} records"
-            )
+        queue_task(
+            task=ingest_owid_backfill_task,
+            label="OWID backfill ingest",
+            stdout=self.stdout,
+            style=self.style,
+            kwargs={
+                "from_date": from_date.isoformat() if from_date else None,
+                "to_date": to_date.isoformat() if to_date else None,
+                "source": source,
+                "csv_url": csv_url or OWID_CSV_URL,
+            },
         )
 
     @staticmethod

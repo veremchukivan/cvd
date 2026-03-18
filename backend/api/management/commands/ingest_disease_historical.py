@@ -1,6 +1,8 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
-from api.services.ingest import ingest_disease_historical
+from api.tasks import ingest_disease_historical as ingest_disease_historical_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
@@ -15,13 +17,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         lastdays = options.get("lastdays") or "all"
-        try:
-            locations, points = ingest_disease_historical(lastdays=lastdays)
-        except RuntimeError as exc:
-            raise CommandError(str(exc)) from exc
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"disease.sh historical data updated: {locations} affected locations, {points} records"
-            )
+        queue_task(
+            task=ingest_disease_historical_task,
+            label="disease.sh historical ingest",
+            stdout=self.stdout,
+            style=self.style,
+            kwargs={"lastdays": lastdays},
         )

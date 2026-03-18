@@ -1,19 +1,17 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
-from api.services.ingest import ingest_disease_data
+from api.tasks import ingest_disease_latest as ingest_disease_latest_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
     help = "Loads COVID-19 data from disease.sh into the database"
 
     def handle(self, *args, **options):
-        try:
-            locations, points = ingest_disease_data()
-        except RuntimeError as exc:
-            raise CommandError(str(exc)) from exc
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"disease.sh data updated: {locations} affected locations, {points} records"
-            )
+        queue_task(
+            task=ingest_disease_latest_task,
+            label="disease.sh latest ingest",
+            stdout=self.stdout,
+            style=self.style,
         )

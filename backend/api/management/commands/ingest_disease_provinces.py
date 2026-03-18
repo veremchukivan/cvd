@@ -1,6 +1,8 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
-from api.services.ingest import ingest_disease_provinces_data
+from api.tasks import ingest_disease_provinces as ingest_disease_provinces_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
@@ -15,13 +17,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         lastdays = options.get("lastdays") or "all"
-        try:
-            provinces, points = ingest_disease_provinces_data(lastdays=lastdays)
-        except RuntimeError as exc:
-            raise CommandError(str(exc)) from exc
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"disease.sh provinces data updated: {provinces} affected provinces, {points} records"
-            )
+        queue_task(
+            task=ingest_disease_provinces_task,
+            label="disease.sh provinces ingest",
+            stdout=self.stdout,
+            style=self.style,
+            kwargs={"lastdays": lastdays},
         )

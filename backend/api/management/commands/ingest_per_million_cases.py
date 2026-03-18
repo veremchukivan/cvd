@@ -1,6 +1,8 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
-from api.services.ingest import ingest_per_million_cases_file
+from api.tasks import ingest_per_million_cases_file as ingest_per_million_cases_file_task
+
+from ._queue import queue_task
 
 
 class Command(BaseCommand):
@@ -28,17 +30,14 @@ class Command(BaseCommand):
         source = options.get("source") or "disease.sh"
         overwrite = not bool(options.get("no_overwrite"))
 
-        try:
-            locations, points = ingest_per_million_cases_file(
-                file_path=file_path,
-                source=source,
-                overwrite=overwrite,
-            )
-        except RuntimeError as exc:
-            raise CommandError(str(exc)) from exc
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Per-million cases import updated: {locations} affected locations, {points} records"
-            )
+        queue_task(
+            task=ingest_per_million_cases_file_task,
+            label="per-million cases import",
+            stdout=self.stdout,
+            style=self.style,
+            kwargs={
+                "file_path": file_path,
+                "source": source,
+                "overwrite": overwrite,
+            },
         )

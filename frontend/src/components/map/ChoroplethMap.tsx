@@ -119,12 +119,20 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
       <ComposableMap projectionConfig={{ scale: 170 }} className="map-canvas">
         <defs>
           <pattern id="map-no-data-hatch" width="8" height="8" patternUnits="userSpaceOnUse">
-            <rect width="8" height="8" fill="#131f34" />
-            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#4b5f79" strokeWidth="1.4" />
+            <rect width="8" height="8" fill="var(--map-hatch-base)" />
+            <path
+              d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4"
+              stroke="var(--map-hatch-stroke)"
+              strokeWidth="1.4"
+            />
           </pattern>
           <pattern id="map-no-data-hatch-hover" width="8" height="8" patternUnits="userSpaceOnUse">
-            <rect width="8" height="8" fill="#1d2b46" />
-            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#86a0bf" strokeWidth="1.4" />
+            <rect width="8" height="8" fill="var(--map-hatch-hover-base)" />
+            <path
+              d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4"
+              stroke="var(--map-hatch-hover-stroke)"
+              strokeWidth="1.4"
+            />
           </pattern>
         </defs>
         <ZoomableGroup
@@ -154,17 +162,17 @@ export const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
                 const isSelected = selectedCountryIso3?.toUpperCase() === iso.toUpperCase();
                 const fill = hasData
                   ? isSelected
-                    ? '#f43f5e'
+                    ? 'var(--map-selected)'
                     : choroplethColor(value, maxValue)
                   : 'url(#map-no-data-hatch)';
-                const hoverFill = hasData ? '#38bdf8' : 'url(#map-no-data-hatch-hover)';
+                const hoverFill = hasData ? 'var(--map-hover)' : 'url(#map-no-data-hatch-hover)';
 
                 return (
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
                     fill={fill}
-                    stroke={isSelected ? '#be123c' : '#0b1224'}
+                    stroke={isSelected ? 'var(--map-selected-stroke)' : 'var(--map-country-stroke)'}
                     strokeWidth={isSelected ? 1.2 : hasData ? 0.6 : 0.8}
                     style={{
                       default: {

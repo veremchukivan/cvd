@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { formatISO, subDays } from 'date-fns';
 import FilterBar from '../components/filters/FilterBar';
 import GlobeMap from '../components/map/GlobeMap';
@@ -34,13 +34,61 @@ const MapDashboardInner: React.FC = () => {
   const mapQuery = buildMapQuery();
   const { valuesByIso3, maxValue, isLoading, isError } = useMapSummary(mapQuery);
   const detailsRef = useRef<HTMLElement | null>(null);
+  const pendingScrollIsoRef = useRef<string | null>(null);
+
+  const scrollToDetails = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const detailsElement = detailsRef.current;
+    if (!detailsElement) {
+      return;
+    }
+
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    detailsElement.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  }, []);
 
   const handleCountrySelect = (iso: string, name?: string) => {
+    pendingScrollIsoRef.current = iso;
     selectCountry(iso, name);
-    window.requestAnimationFrame(() => {
-      detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
   };
+
+  useEffect(() => {
+    if (!state.drawerOpen || !state.selectedCountryIso3) {
+      return;
+    }
+
+    if (pendingScrollIsoRef.current !== state.selectedCountryIso3) {
+      return;
+    }
+
+    pendingScrollIsoRef.current = null;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let scrollTimeout = 0;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        scrollTimeout = window.setTimeout(() => {
+          scrollToDetails();
+        }, 80);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(scrollTimeout);
+    };
+  }, [scrollToDetails, state.drawerOpen, state.selectedCountryIso3]);
 
   const handleReset = () => {
     const today = formatISO(new Date(), { representation: 'date' });
@@ -49,6 +97,7 @@ const MapDashboardInner: React.FC = () => {
     setDateMode('day');
     setDate(today);
     setRange({ from, to: today });
+    pendingScrollIsoRef.current = null;
     selectCountry(null);
   };
 

@@ -160,7 +160,10 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const movedDuringDragRef = useRef(false);
-  const ashParticles = useMemo(() => createAshParticles(34), []);
+  const hoverFrameRef = useRef<number | null>(null);
+  const hoverBadgeRef = useRef<HoverBadgeState | null>(null);
+  const ashParticles = useMemo(() => createAshParticles(16), []);
+  const ambientSceneEnabled = !reduceMotion && !isDragging;
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -181,30 +184,51 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       return;
     }
 
-    const interval = window.setInterval(() => {
+    let frameId = 0;
+    let lastFrameTime = window.performance.now();
+
+    const tick = (frameTime: number) => {
       if (Date.now() < autoRotatePausedUntil) {
+        lastFrameTime = frameTime;
+        frameId = window.requestAnimationFrame(tick);
         return;
       }
-      setRotation((current) => [normalizeLongitude(current[0] + 0.06), current[1], current[2]]);
-    }, 34);
+
+      const elapsed = frameTime - lastFrameTime;
+      if (elapsed >= 34) {
+        const step = (elapsed / 34) * 0.06;
+        setRotation((current) => [normalizeLongitude(current[0] + step), current[1], current[2]]);
+        lastFrameTime = frameTime;
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
 
     return () => {
-      window.clearInterval(interval);
+      window.cancelAnimationFrame(frameId);
     };
   }, [autoRotatePausedUntil, isDragging]);
 
+  useEffect(
+    () => () => {
+      if (hoverFrameRef.current !== null) {
+        window.cancelAnimationFrame(hoverFrameRef.current);
+      }
+    },
+    []
+  );
+
   const pauseAutoRotate = useCallback(
     (ms: number) => {
-      if (reduceMotion) {
-        return;
-      }
       setAutoRotatePausedUntil(Date.now() + ms);
     },
-    [reduceMotion]
+    []
   );
 
   const finishDragging = useCallback(
-    (pointerId?: number) => {
+    (pointerId?: number, pauseMs = 900) => {
       const dragState = dragStateRef.current;
       if (!dragState) {
         return;
@@ -215,7 +239,7 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       dragStateRef.current = null;
       setIsDragging(false);
       setIsPointerActive(false);
-      pauseAutoRotate(1800);
+      pauseAutoRotate(pauseMs);
     },
     [pauseAutoRotate]
   );
@@ -288,11 +312,31 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
 
     const maxLeft = Math.max(8, rect.width - 220);
     const maxTop = Math.max(8, rect.height - 88);
-    setHoverBadge({
+    hoverBadgeRef.current = {
       ...nextState,
       x: Math.min(Math.max(event.clientX - rect.left + 12, 8), maxLeft),
       y: Math.min(Math.max(event.clientY - rect.top + 12, 8), maxTop),
+    };
+
+    if (hoverFrameRef.current !== null) {
+      return;
+    }
+
+    hoverFrameRef.current = window.requestAnimationFrame(() => {
+      hoverFrameRef.current = null;
+      if (hoverBadgeRef.current) {
+        setHoverBadge(hoverBadgeRef.current);
+      }
     });
+  };
+
+  const clearHoverBadge = () => {
+    hoverBadgeRef.current = null;
+    if (hoverFrameRef.current !== null) {
+      window.cancelAnimationFrame(hoverFrameRef.current);
+      hoverFrameRef.current = null;
+    }
+    setHoverBadge(null);
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -316,53 +360,68 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       startRotation: rotation,
     };
     setIsPointerActive(true);
-    setHoverBadge(null);
+    clearHoverBadge();
   };
 
   const handleCountrySelect = (iso: string, name?: string) => {
+    const didDrag = movedDuringDragRef.current;
     if (dragStateRef.current) {
-      finishDragging();
+      finishDragging(undefined, didDrag ? 1100 : 220);
     }
     if (!iso) {
       return;
     }
-    if (movedDuringDragRef.current) {
+    if (didDrag) {
       movedDuringDragRef.current = false;
       return;
     }
+    clearHoverBadge();
+    pauseAutoRotate(220);
     onSelect(iso, name);
   };
 
   return (
     <div
-      className={`map-card globe-card ${isDragging ? 'globe-card-dragging' : ''}`}
+      className={`map-card globe-card ${isDragging ? 'globe-card-dragging' : ''} ${ambientSceneEnabled ? '' : 'globe-card-lite'}`}
       ref={cardRef}
       onPointerDown={handlePointerDown}
       onPointerUp={(event) => finishDragging(event.pointerId)}
       onPointerCancel={(event) => finishDragging(event.pointerId)}
       onMouseUp={() => finishDragging()}
       onTouchEnd={() => finishDragging()}
-      onPointerLeave={() => setHoverBadge(null)}
+      onPointerLeave={clearHoverBadge}
     >
       <div className="globe-backdrop" aria-hidden="true" />
-      <div className="globe-ash-layer" aria-hidden="true">
-        {ashParticles.map((particle) => (
-          <span
-            key={particle.id}
-            className="globe-ash"
-            style={
-              {
-                left: `${particle.left}%`,
-                '--ash-size': `${particle.size}px`,
-                '--ash-duration': `${particle.duration}s`,
-                '--ash-delay': `-${particle.delay}s`,
-                '--ash-opacity': `${particle.opacity}`,
-                '--ash-drift': `${particle.drift}px`,
-              } as AshParticleStyle
-            }
-          />
-        ))}
-      </div>
+      {ambientSceneEnabled ? (
+        <>
+          <div className="globe-grid-field" aria-hidden="true" />
+          <div className="globe-core-glow" aria-hidden="true" />
+          <div className="globe-radar-sweep" aria-hidden="true" />
+          <div className="globe-orbit-field" aria-hidden="true">
+            <span className="globe-orbit globe-orbit-a" />
+            <span className="globe-orbit globe-orbit-b" />
+            <span className="globe-orbit globe-orbit-c" />
+          </div>
+          <div className="globe-ash-layer" aria-hidden="true">
+            {ashParticles.map((particle) => (
+              <span
+                key={particle.id}
+                className="globe-ash"
+                style={
+                  {
+                    left: `${particle.left}%`,
+                    '--ash-size': `${particle.size}px`,
+                    '--ash-duration': `${particle.duration}s`,
+                    '--ash-delay': `-${particle.delay}s`,
+                    '--ash-opacity': `${particle.opacity}`,
+                    '--ash-drift': `${particle.drift}px`,
+                  } as AshParticleStyle
+                }
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
       <div className="globe-hint">Drag to rotate • Click country for details</div>
       <ComposableMap
         projection="geoOrthographic"
@@ -374,26 +433,39 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
       >
         <defs>
           <radialGradient id="globe-ocean" cx="50%" cy="38%" r="65%">
-            <stop offset="0%" stopColor="#1d3a66" />
-            <stop offset="55%" stopColor="#0f2749" />
-            <stop offset="100%" stopColor="#071429" />
+            <stop offset="0%" stopColor="var(--globe-ocean-core)" />
+            <stop offset="55%" stopColor="var(--globe-ocean-mid)" />
+            <stop offset="100%" stopColor="var(--globe-ocean-edge)" />
           </radialGradient>
           <radialGradient id="globe-ocean-shadow" cx="50%" cy="50%" r="52%">
-            <stop offset="0%" stopColor="rgba(8, 20, 40, 0)" />
-            <stop offset="100%" stopColor="rgba(2, 8, 20, 0.65)" />
+            <stop offset="0%" stopColor="var(--globe-shadow-start)" />
+            <stop offset="100%" stopColor="var(--globe-shadow-end)" />
           </radialGradient>
           <pattern id="globe-no-data-hatch" width="8" height="8" patternUnits="userSpaceOnUse">
-            <rect width="8" height="8" fill="#131f34" />
-            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#4b5f79" strokeWidth="1.3" />
+            <rect width="8" height="8" fill="var(--map-hatch-base)" />
+            <path
+              d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4"
+              stroke="var(--map-hatch-stroke)"
+              strokeWidth="1.3"
+            />
           </pattern>
           <pattern id="globe-no-data-hatch-hover" width="8" height="8" patternUnits="userSpaceOnUse">
-            <rect width="8" height="8" fill="#1d2b46" />
-            <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#86a0bf" strokeWidth="1.3" />
+            <rect width="8" height="8" fill="var(--map-hatch-hover-base)" />
+            <path
+              d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4"
+              stroke="var(--map-hatch-hover-stroke)"
+              strokeWidth="1.3"
+            />
           </pattern>
         </defs>
-        <Sphere id="globe-sphere" fill="url(#globe-ocean)" stroke="#1f3f66" strokeWidth={0.9} />
+        <Sphere
+          id="globe-sphere"
+          fill="url(#globe-ocean)"
+          stroke="var(--globe-sphere-stroke)"
+          strokeWidth={0.9}
+        />
         <Sphere id="globe-shadow-sphere" fill="url(#globe-ocean-shadow)" />
-        <Graticule stroke="rgba(76, 125, 176, 0.35)" strokeWidth={0.4} />
+        <Graticule stroke="var(--globe-grid-stroke)" strokeWidth={0.4} />
         <Geographies geography={geoUrl}>
           {({ geographies }: { geographies: GeographyFeature[] }) =>
             geographies.map((geo: GeographyFeature) => {
@@ -408,17 +480,17 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
               const isSelected = selectedCountryIso3?.toUpperCase() === iso.toUpperCase();
               const fill = hasData
                 ? isSelected
-                  ? '#f43f5e'
+                  ? 'var(--map-selected)'
                   : choroplethColor(value, maxValue)
                 : 'url(#globe-no-data-hatch)';
-              const hoverFill = hasData ? '#67e8f9' : 'url(#globe-no-data-hatch-hover)';
+              const hoverFill = hasData ? 'var(--map-hover)' : 'url(#globe-no-data-hatch-hover)';
 
               return (
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
                   fill={fill}
-                  stroke={isSelected ? '#be123c' : '#0a1324'}
+                  stroke={isSelected ? 'var(--map-selected-stroke)' : 'var(--map-country-stroke)'}
                   strokeWidth={isSelected ? 1.2 : 0.55}
                   style={{
                     default: { outline: 'none' },
@@ -455,8 +527,8 @@ const GlobeMap: React.FC<GlobeMapProps> = ({
                       hoverValue,
                     })
                   }
-                  onMouseLeave={() => setHoverBadge(null)}
-                  onBlur={() => setHoverBadge(null)}
+                  onMouseLeave={clearHoverBadge}
+                  onBlur={clearHoverBadge}
                   aria-label={countryName || iso}
                   tabIndex={0}
                   role="button"

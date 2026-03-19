@@ -1,11 +1,8 @@
 import React from 'react';
-import createPlotlyComponent from 'react-plotly.js/factory';
-import Plotly from 'plotly.js-basic-dist';
+import Plot from '../common/Plot';
 import { useCountryDetails } from '../../hooks/useCountryDetails';
 import { useCountryProvinces } from '../../hooks/useCountryProvinces';
 import { CountryDetailsQuery, DateMode, DateRange, Metric, SummaryMetric } from '../../types/map';
-
-const Plot = createPlotlyComponent(Plotly);
 
 const metricLabels: Record<Metric, string> = {
   cases: 'Cases',

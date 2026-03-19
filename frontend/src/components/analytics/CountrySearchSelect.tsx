@@ -1,5 +1,6 @@
 import React from 'react';
 import { CountryOption } from '../../types/country';
+import { usePreferences } from '../../state/preferences';
 
 type CountrySearchSelectProps = {
   label: string;
@@ -30,9 +31,11 @@ const CountrySearchSelect: React.FC<CountrySearchSelectProps> = ({
   toggleAriaLabel,
   containerRef,
   showNoneOption = false,
-  noneLabel = 'None',
+  noneLabel,
 }) => {
+  const { copy } = usePreferences();
   const hasValue = value.trim().length > 0;
+  const resolvedNoneLabel = noneLabel || copy.filters.none;
 
   return (
     <div className="filter-group">
@@ -69,7 +72,7 @@ const CountrySearchSelect: React.FC<CountrySearchSelectProps> = ({
               onValueChange('');
               onOpenChange(true);
             }}
-            aria-label="Clear country search"
+            aria-label={copy.filters.clearCountrySearch}
             disabled={!hasValue}
           >
             ×
@@ -95,7 +98,7 @@ const CountrySearchSelect: React.FC<CountrySearchSelectProps> = ({
                   onOpenChange(false);
                 }}
               >
-                <span>{noneLabel}</span>
+                <span>{resolvedNoneLabel}</span>
                 <span className="charts-country-suggest-iso">—</span>
               </button>
             ) : null}
@@ -115,7 +118,7 @@ const CountrySearchSelect: React.FC<CountrySearchSelectProps> = ({
                 </button>
               ))
             ) : (
-              <p className="charts-country-suggest-empty">No countries found</p>
+              <p className="charts-country-suggest-empty">{copy.filters.noCountriesFound}</p>
             )}
           </div>
         ) : null}

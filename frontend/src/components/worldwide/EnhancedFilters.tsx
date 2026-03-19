@@ -2,6 +2,7 @@ import React from 'react';
 import DatePickerInput from '../filters/DatePickerInput';
 import { QuickRangeLabel } from '../../lib/analytics';
 import { DateMode, DateRange, GroupBy, Metric } from '../../types/map';
+import { usePreferences } from '../../state/preferences';
 import './EnhancedFilters.css';
 
 type WorldwideFiltersProps = {
@@ -32,109 +33,110 @@ const WorldwideFilters: React.FC<WorldwideFiltersProps> = ({
   onRankMetricChange,
   rankGroupBy,
   onRankGroupByChange,
-}) => (
-  <div className="worldwide-filter-shell">
-    <div className="worldwide-filter-grid">
-      {/* View Mode */}
-      <div className="worldwide-filter-card">
-        <label className="filter-label">View mode</label>
-        <div className="worldwide-toggle">
-          <button
-            type="button"
-            className={`worldwide-toggle-btn ${dateMode === 'day' ? 'worldwide-toggle-btn-active' : ''}`}
-            onClick={() => onDateModeChange('day')}
+}) => {
+  const { copy } = usePreferences();
+
+  return (
+    <div className="worldwide-filter-shell">
+      <div className="worldwide-filter-grid">
+        <div className="worldwide-filter-card">
+          <label className="filter-label">{copy.filters.viewMode}</label>
+          <div className="worldwide-toggle">
+            <button
+              type="button"
+              className={`worldwide-toggle-btn ${dateMode === 'day' ? 'worldwide-toggle-btn-active' : ''}`}
+              onClick={() => onDateModeChange('day')}
+            >
+              {copy.filters.dayShort}
+            </button>
+            <button
+              type="button"
+              className={`worldwide-toggle-btn ${dateMode === 'range' ? 'worldwide-toggle-btn-active' : ''}`}
+              onClick={() => onDateModeChange('range')}
+            >
+              {copy.filters.rangeShort}
+            </button>
+            <button
+              type="button"
+              className={`worldwide-toggle-btn ${dateMode === 'total' ? 'worldwide-toggle-btn-active' : ''}`}
+              onClick={() => onDateModeChange('total')}
+            >
+              {copy.filters.total}
+            </button>
+          </div>
+        </div>
+
+        <div className="worldwide-filter-card">
+          {dateMode === 'day' ? (
+            <>
+              <label className="filter-label">{copy.filters.dateSnapshot}</label>
+              <DatePickerInput value={date} onChange={onDateChange} />
+            </>
+          ) : dateMode === 'range' ? (
+            <>
+              <label className="filter-label">{copy.filters.periodWindow}</label>
+              <div className="worldwide-date-range-row">
+                <DatePickerInput
+                  value={range.from}
+                  maxDate={range.to}
+                  onChange={(nextIso) => onRangeChange({ ...range, from: nextIso })}
+                />
+                <span className="dash">–</span>
+                <DatePickerInput
+                  value={range.to}
+                  minDate={range.from}
+                  onChange={(nextIso) => onRangeChange({ ...range, to: nextIso })}
+                />
+              </div>
+              <div className="worldwide-chip-row">
+                <button type="button" className="worldwide-chip" onClick={() => onQuickRange('7d')}>
+                  7d
+                </button>
+                <button type="button" className="worldwide-chip" onClick={() => onQuickRange('30d')}>
+                  30d
+                </button>
+                <button type="button" className="worldwide-chip" onClick={() => onQuickRange('ytd')}>
+                  {copy.filters.ytd}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="filter-label">{copy.filters.dateRange}</label>
+              <span className="pill pill-ghost">{copy.filters.allTimeAggregate}</span>
+            </>
+          )}
+        </div>
+
+        <div className="worldwide-filter-card">
+          <label className="filter-label">{copy.filters.countryRanking}</label>
+          <select
+            value={rankMetric}
+            onChange={(e) => onRankMetricChange(e.target.value as Metric)}
+            className="filter-select"
           >
-            Day
-          </button>
-          <button
-            type="button"
-            className={`worldwide-toggle-btn ${dateMode === 'range' ? 'worldwide-toggle-btn-active' : ''}`}
-            onClick={() => onDateModeChange('range')}
+            {rankMetricOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="worldwide-filter-card">
+          <label className="filter-label">{copy.filters.rankingLevel}</label>
+          <select
+            value={rankGroupBy}
+            onChange={(e) => onRankGroupByChange(e.target.value as GroupBy)}
+            className="filter-select"
           >
-            Range
-          </button>
-          <button
-            type="button"
-            className={`worldwide-toggle-btn ${dateMode === 'total' ? 'worldwide-toggle-btn-active' : ''}`}
-            onClick={() => onDateModeChange('total')}
-          >
-            Total
-          </button>
+            <option value="country">{copy.filters.countryOption}</option>
+            <option value="continent">{copy.filters.continentOption}</option>
+          </select>
         </div>
       </div>
-
-      {/* Date Filters */}
-      <div className="worldwide-filter-card">
-        {dateMode === 'day' ? (
-          <>
-            <label className="filter-label">Date snapshot</label>
-            <DatePickerInput value={date} onChange={onDateChange} />
-          </>
-        ) : dateMode === 'range' ? (
-          <>
-            <label className="filter-label">Period window</label>
-            <div className="worldwide-date-range-row">
-              <DatePickerInput
-                value={range.from}
-                maxDate={range.to}
-                onChange={(nextIso) => onRangeChange({ ...range, from: nextIso })}
-              />
-              <span className="dash">–</span>
-              <DatePickerInput
-                value={range.to}
-                minDate={range.from}
-                onChange={(nextIso) => onRangeChange({ ...range, to: nextIso })}
-              />
-            </div>
-            <div className="worldwide-chip-row">
-              <button type="button" className="worldwide-chip" onClick={() => onQuickRange('7d')}>
-                7d
-              </button>
-              <button type="button" className="worldwide-chip" onClick={() => onQuickRange('30d')}>
-                30d
-              </button>
-              <button type="button" className="worldwide-chip" onClick={() => onQuickRange('ytd')}>
-                YTD
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <label className="filter-label">Date range</label>
-            <span className="pill pill-ghost">All-time aggregate</span>
-          </>
-        )}
-      </div>
-
-      {/* Ranking Metric */}
-      <div className="worldwide-filter-card">
-        <label className="filter-label">Country ranking</label>
-        <select
-          value={rankMetric}
-          onChange={(e) => onRankMetricChange(e.target.value as Metric)}
-          className="filter-select"
-        >
-          {rankMetricOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="worldwide-filter-card">
-        <label className="filter-label">Ranking level</label>
-        <select
-          value={rankGroupBy}
-          onChange={(e) => onRankGroupByChange(e.target.value as GroupBy)}
-          className="filter-select"
-        >
-          <option value="country">Country</option>
-          <option value="continent">Continent</option>
-        </select>
-      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default WorldwideFilters;

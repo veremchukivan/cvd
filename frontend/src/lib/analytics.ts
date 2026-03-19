@@ -1,22 +1,8 @@
 import { formatISO, startOfYear, subDays } from 'date-fns';
 import { CountryDetailsQuery, DateMode, DateRange, Metric, SummaryMetric } from '../types/map';
+import { formatNumericValue, LocaleCode, summaryMetricLabel as localizedSummaryMetricLabel } from './i18n';
 
 export type QuickRangeLabel = '7d' | '30d' | 'ytd';
-
-const summaryMetricLabels: Record<SummaryMetric, string> = {
-  today_cases: 'Cases (daily)',
-  today_deaths: 'Deaths (daily)',
-  today_recovered: 'Recovered (daily)',
-  today_vaccinations: 'Vaccinations (daily)',
-  cases: 'Cases',
-  deaths: 'Deaths',
-  recovered: 'Recovered',
-  active: 'Active',
-  tests: 'Tests',
-  vaccinations_total: 'Vaccinations (total)',
-  incidence: 'Incidence',
-  mortality: 'Mortality (%)',
-};
 
 export function metricToSummaryMetric(metric: Metric, dateMode: DateMode): SummaryMetric {
   if (metric === 'cases') return 'today_cases';
@@ -28,14 +14,18 @@ export function metricToSummaryMetric(metric: Metric, dateMode: DateMode): Summa
   return metric;
 }
 
-export function summaryMetricLabel(metric: SummaryMetric): string {
-  return summaryMetricLabels[metric] || metric;
+export function summaryMetricLabel(metric: SummaryMetric, locale?: LocaleCode): string {
+  return localizedSummaryMetricLabel(metric, locale);
 }
 
-export function formatSummaryValue(metric: SummaryMetric, value: number | null | undefined): string {
+export function formatSummaryValue(
+  metric: SummaryMetric,
+  value: number | null | undefined,
+  locale?: LocaleCode
+): string {
   if (value === null || value === undefined) return '—';
   if (metric === 'mortality') return `${value.toFixed(2)}%`;
-  return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatNumericValue(value, locale, { maximumFractionDigits: 2 });
 }
 
 export function quickRangeBounds(label: QuickRangeLabel): DateRange {

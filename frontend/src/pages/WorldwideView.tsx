@@ -15,6 +15,7 @@ import {
   quickRangeBounds,
 } from '../lib/analytics';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
+import { usePreferences } from '../state/preferences';
 import { CountryDetailsResponse, DateMode, DateRange, GroupBy, Metric, SummaryMetric } from '../types/map';
 
 const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -47,6 +48,7 @@ function weekdayFromIsoDate(isoDate: string): (typeof weekdayOrder)[number] {
 }
 
 const WorldwideView: React.FC = () => {
+  const { copy, locale } = usePreferences();
   const today = formatISO(new Date(), { representation: 'date' });
   const [dateMode, setDateMode] = useState<DateMode>('day');
   const [date, setDate] = useState(today);
@@ -56,17 +58,17 @@ const WorldwideView: React.FC = () => {
   });
   const [rankMetric, setRankMetric] = useState<Metric>('cases');
   const [rankGroupBy, setRankGroupBy] = useState<GroupBy>('country');
-  const rankMetricOptions = useMemo(() => metricOptionsForDateMode(dateMode), [dateMode]);
+  const rankMetricOptions = useMemo(() => metricOptionsForDateMode(dateMode, locale), [dateMode, locale]);
 
   useEffect(() => {
-    if (isMetricAllowedForDateMode(rankMetric, dateMode)) {
+    if (isMetricAllowedForDateMode(rankMetric, dateMode, locale)) {
       return;
     }
     const fallback = rankMetricOptions[0]?.value;
     if (fallback) {
       setRankMetric(fallback);
     }
-  }, [dateMode, rankMetric, rankMetricOptions]);
+  }, [dateMode, locale, rankMetric, rankMetricOptions]);
   const vaccinationsEnabled = dateMode === 'total';
 
   const queryCases = buildCountryQuery('WORLD', 'today_cases', dateMode, date, range);
@@ -123,7 +125,7 @@ const WorldwideView: React.FC = () => {
   const rankingQuality = rankingQuery.data?.quality;
   const rankingAnomalies = rankingQuery.data?.anomalies;
   const periodLabel =
-    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : copy.worldwide.allTime;
   const totals = casesData?.totals || casesData?.snapshot;
   const casesSeries = useMemo(() => casesData?.series ?? [], [casesData?.series]);
   const deathsSeries = useMemo(() => deathsData?.series ?? [], [deathsData?.series]);
@@ -234,33 +236,48 @@ const WorldwideView: React.FC = () => {
   const rankLabels = useMemo(() => ranking.map((item) => item.name || item.isoCode), [ranking]);
   const rankValues = useMemo(() => ranking.map((item) => item.value ?? 0), [ranking]);
   const rankMetricLabel = rankMetricOptions.find((m) => m.value === rankMetric)?.label;
-  const rankEntityLabel = rankGroupBy === 'continent' ? 'continents' : 'countries';
+  const rankEntityLabel = rankGroupBy === 'continent' ? copy.worldwide.continents : copy.worldwide.countries;
   const topRank = ranking[0];
-  const topRankName = topRank?.name || topRank?.isoCode || `No ${rankEntityLabel} yet`;
-  const topRankValue = topRank ? formatSummaryValue(rankSummaryMetric, topRank.value) : '—';
-  const modeLabel = dateMode === 'day' ? 'Day snapshot' : dateMode === 'range' ? 'Range window' : 'All-time';
+  const topRankName =
+    topRank?.name ||
+    topRank?.isoCode ||
+    (rankGroupBy === 'continent' ? copy.worldwide.noContinentsYet : copy.worldwide.noCountriesYet);
+  const topRankValue = topRank ? formatSummaryValue(rankSummaryMetric, topRank.value, locale) : '—';
+  const modeLabel =
+    dateMode === 'day'
+      ? copy.worldwide.daySnapshot
+      : dateMode === 'range'
+        ? copy.worldwide.rangeWindow
+        : copy.worldwide.allTimeMode;
 
   return (
     <div className="page world-page">
       <header className="page-header world-header-shell">
         <div className="world-header-main">
-          <p className="eyebrow">Global monitor</p>
-          <h1 className="title">COVID Worldwide</h1>
-          <p className="lede">
-            Global dashboard with redesigned visuals, expanded analytics and interactive chart controls for the
-            selected period. Vaccination comparisons are available in total mode.
-          </p>
+          <p className="eyebrow">{copy.worldwide.eyebrow}</p>
+          <h1 className="title">{copy.worldwide.title}</h1>
+          <p className="lede">{copy.worldwide.lede}</p>
           <div className="world-header-pills">
-            <span className="pill pill-ghost">Mode: {modeLabel}</span>
-            <span className="pill pill-ghost">Window: {periodLabel}</span>
-            <span className="pill pill-ghost">Ranking: {rankEntityLabel}</span>
+            <span className="pill pill-ghost">
+              {copy.worldwide.modeLabel}: {modeLabel}
+            </span>
+            <span className="pill pill-ghost">
+              {copy.worldwide.windowLabel}: {periodLabel}
+            </span>
+            <span className="pill pill-ghost">
+              {copy.worldwide.rankingLabel}: {rankEntityLabel}
+            </span>
           </div>
         </div>
         <aside className="world-header-spotlight">
-          <p className="panel-kicker">Top {rankEntityLabel}</p>
+          <p className="panel-kicker">
+            {copy.worldwide.topPrefix} {rankEntityLabel}
+          </p>
           <p className="world-spotlight-name">{topRankName}</p>
           <p className="world-spotlight-value">{topRankValue}</p>
-          <p className="world-spotlight-meta">{rankMetricLabel || 'Metric'} • Live ranking</p>
+          <p className="world-spotlight-meta">
+            {rankMetricLabel || copy.worldwide.metricFallback} • {copy.worldwide.liveRanking}
+          </p>
         </aside>
       </header>
 
@@ -280,7 +297,7 @@ const WorldwideView: React.FC = () => {
           onRankGroupByChange={setRankGroupBy}
         />
 
-        {worldError ? <div className="banner banner-error">Unable to load worldwide data.</div> : null}
+        {worldError ? <div className="banner banner-error">{copy.worldwide.bannerError}</div> : null}
 
         <div className="world-utility-grid">
           <ExportPanel

@@ -5,20 +5,12 @@ import GlobeMap from '../components/map/GlobeMap';
 import Legend from '../components/map/Legend';
 import CountryPanel from '../components/panels/CountryPanel';
 import { useMapSummary } from '../hooks/useMapSummary';
+import { metricLabel } from '../lib/i18n';
 import { DashboardProvider, useDashboard } from '../state/dashboard';
-
-const metricLabels = {
-  cases: 'Cases',
-  deaths: 'Deaths',
-  recovered: 'Recovered',
-  vaccinations_total: 'Vaccinations',
-  active: 'Active',
-  tests: 'Tests',
-  incidence: 'Incidence',
-  mortality: 'Mortality',
-} as const;
+import { usePreferences } from '../state/preferences';
 
 const MapDashboardInner: React.FC = () => {
+  const { copy } = usePreferences();
   const {
     state,
     setMetric,
@@ -105,43 +97,40 @@ const MapDashboardInner: React.FC = () => {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">COVID explorer</p>
-          <h1 className="title">COVID 3D Atlas</h1>
-          <p className="lede">
-            Explore COVID data on an interactive 3D globe. Rotate the world, pick a metric, and
-            filter by single day, period, or total mode from the control dock below the map.
-          </p>
+          <p className="eyebrow">{copy.map.eyebrow}</p>
+          <h1 className="title">{copy.map.title}</h1>
+          <p className="lede">{copy.map.lede}</p>
         </div>
       </header>
 
-      {isError && <div className="banner banner-error">Unable to load map data</div>}
+      {isError && <div className="banner banner-error">{copy.map.bannerError}</div>}
 
       <div className="map-stage globe-stage">
         <div className="map-wrapper map-wrapper-full globe-wrapper">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">3D world view</p>
+              <p className="eyebrow">{copy.map.cardEyebrow}</p>
               <h2 className="card-title">
-                {state.metric} •{' '}
+                {metricLabel(state.metric)} •{' '}
                 {state.dateMode === 'day'
                   ? state.date
                   : state.dateMode === 'range'
                     ? `${state.range.from} → ${state.range.to}`
-                    : 'All time'}
+                    : copy.map.allTime}
               </h2>
             </div>
-            <span className="pill pill-ghost">Rotate, hover, and click for full details</span>
+            <span className="pill pill-ghost">{copy.map.cardHint}</span>
           </div>
           <GlobeMap
             valuesByIso3={valuesByIso3}
             hoverValuesByIso3={valuesByIso3}
-            hoverMetricLabel={metricLabels[state.metric]}
+            hoverMetricLabel={metricLabel(state.metric)}
             maxValue={maxValue}
             selectedCountryIso3={state.selectedCountryIso3}
             loading={isLoading}
             onSelect={handleCountrySelect}
           />
-          <Legend maxValue={maxValue} metricLabel={`${metricLabels[state.metric]} scale`} />
+          <Legend maxValue={maxValue} metricLabel={`${metricLabel(state.metric)} ${copy.map.legendScaleSuffix}`} />
         </div>
         <div className="globe-filter-dock">
           <FilterBar
@@ -172,9 +161,7 @@ const MapDashboardInner: React.FC = () => {
         />
       </section>
 
-      <div className="footer-hint">
-        Data source: WHO + Johns Hopkins CSSE • Drag globe to rotate • Click country to jump to the details panel
-      </div>
+      <div className="footer-hint">{copy.map.footerHint}</div>
     </div>
   );
 };

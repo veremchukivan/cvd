@@ -21,6 +21,7 @@ describe('App shell', () => {
   beforeEach(() => {
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;
+    document.documentElement.lang = 'en';
   });
 
   it('renders map view with filters', () => {
@@ -34,9 +35,39 @@ describe('App shell', () => {
   it('switches theme and persists it', () => {
     render(<App />);
 
+    fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
     fireEvent.click(screen.getByRole('button', { name: /White theme/i }));
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ivory');
     expect(window.localStorage.getItem('cvd-theme-mode')).toBe('ivory');
+  });
+
+  it('shows extended locale list and persists slovak locale', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
+    expect(screen.getByRole('button', { name: /Русский/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Slovenčina/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Slovenčina/i }));
+
+    expect(document.documentElement.lang).toBe('sk');
+    expect(window.localStorage.getItem('cvd-locale')).toBe('sk');
+    expect(screen.getByRole('button', { name: 'Mapa' })).toBeInTheDocument();
+  });
+
+  it('toggles the mobile burger menu and closes it after navigation', () => {
+    render(<App />);
+
+    const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(menuButton);
+
+    const closeButton = screen.getByRole('button', { name: /close navigation menu/i });
+    expect(closeButton).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
+
+    expect(screen.getByRole('button', { name: /open navigation menu/i })).toHaveAttribute('aria-expanded', 'false');
   });
 });

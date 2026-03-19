@@ -6,11 +6,9 @@ import CompareView from './pages/CompareView';
 import WorldwideView from './pages/WorldwideView';
 import AboutView from './pages/AboutView';
 import FaqView from './pages/FaqView';
+import SettingsView from './pages/SettingsView';
+import { PreferencesProvider, usePreferences } from './state/preferences';
 import './App.css';
-
-type ThemeMode = 'obsidian' | 'ivory';
-
-const THEME_STORAGE_KEY = 'cvd-theme-mode';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,100 +19,119 @@ const queryClient = new QueryClient({
   },
 });
 
-function resolveInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') {
-    return 'obsidian';
-  }
+type ViewId = 'map' | 'charts' | 'compare' | 'worldwide' | 'about' | 'faq' | 'settings';
 
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (storedTheme === 'obsidian' || storedTheme === 'ivory') {
-    return storedTheme;
-  }
+const AppShell: React.FC = () => {
+  const [view, setView] = React.useState<ViewId>('map');
+  const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
+  const { theme, copy } = usePreferences();
 
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'ivory' : 'obsidian';
-  }
-
-  return 'obsidian';
-}
-
-function App() {
-  const [view, setView] = React.useState<
-    'map' | 'charts' | 'compare' | 'worldwide' | 'about' | 'faq'
-  >('map');
-  const [theme, setTheme] = React.useState<ThemeMode>(resolveInitialTheme);
-
-  const navItems: Array<{
-    id: 'map' | 'charts' | 'compare' | 'worldwide' | 'about' | 'faq';
-    label: string;
-  }> = [
-    { id: 'map', label: 'Map' },
-    { id: 'worldwide', label: 'COVID Worldwide' },
-    { id: 'charts', label: 'Graphs' },
-    { id: 'compare', label: 'Compare countries' },
-    { id: 'about', label: 'About' },
-    { id: 'faq', label: 'FAQ' },
-  ];
+  const navItems = React.useMemo<Array<{ id: ViewId; label: string }>>(
+    () => [
+      { id: 'map', label: copy.nav.items.map },
+      { id: 'worldwide', label: copy.nav.items.worldwide },
+      { id: 'charts', label: copy.nav.items.charts },
+      { id: 'compare', label: copy.nav.items.compare },
+      { id: 'about', label: copy.nav.items.about },
+      { id: 'faq', label: copy.nav.items.faq },
+      { id: 'settings', label: copy.nav.items.settings },
+    ],
+    [copy.nav.items]
+  );
+  const currentViewLabel = navItems.find((item) => item.id === view)?.label || copy.appName;
 
   React.useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    document.title = `${currentViewLabel} | ${copy.appName}`;
+  }, [copy.appName, currentViewLabel]);
+
+  React.useEffect(() => {
+    if (!isMobileNavOpen) {
+      return undefined;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isMobileNavOpen]);
+
+  const handleViewChange = (nextView: ViewId) => {
+    setView(nextView);
+    setIsMobileNavOpen(false);
+  };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="App" data-theme={theme}>
-        <div className="app-shell">
-          <aside className="app-sidebar">
-            <p className="eyebrow">Navigation</p>
-            <h2 className="app-sidebar-title">Workspace</h2>
-            <div className="app-nav">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`pill ${view === item.id ? 'pill-active' : 'pill-ghost'}`}
-                  onClick={() => setView(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <div className="theme-panel">
-              <p className="eyebrow">Theme</p>
-              <div className="theme-toggle" role="group" aria-label="Theme mode">
-                <button
-                  type="button"
-                  className={`pill ${theme === 'obsidian' ? 'pill-active' : 'pill-ghost'}`}
-                  onClick={() => setTheme('obsidian')}
-                  aria-pressed={theme === 'obsidian'}
-                >
-                  Black theme
-                </button>
-                <button
-                  type="button"
-                  className={`pill ${theme === 'ivory' ? 'pill-active' : 'pill-ghost'}`}
-                  onClick={() => setTheme('ivory')}
-                  aria-pressed={theme === 'ivory'}
-                >
-                  White theme
-                </button>
-              </div>
-              <p className="theme-note">
-                Monochrome shell with a cinematic map stage and animated ambient layers.
-              </p>
-            </div>
-          </aside>
-          <main className="app-main">
-            {view === 'map' ? <MapView /> : null}
-            {view === 'worldwide' ? <WorldwideView /> : null}
-            {view === 'charts' ? <ChartsView /> : null}
-            {view === 'compare' ? <CompareView /> : null}
-            {view === 'about' ? <AboutView /> : null}
-            {view === 'faq' ? <FaqView /> : null}
-          </main>
+    <div className="App" data-theme={theme}>
+      <div className="app-mobile-topbar">
+        <button
+          type="button"
+          className={`app-menu-toggle ${isMobileNavOpen ? 'app-menu-toggle-active' : ''}`}
+          onClick={() => setIsMobileNavOpen((current) => !current)}
+          aria-label={isMobileNavOpen ? copy.nav.closeMenu : copy.nav.openMenu}
+          aria-controls="app-sidebar"
+          aria-expanded={isMobileNavOpen}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        <div className="app-mobile-topbar-copy">
+          <p className="eyebrow">{copy.nav.eyebrow}</p>
+          <p className="app-mobile-current-view">{currentViewLabel}</p>
         </div>
       </div>
+      <div className="app-shell">
+        <div
+          className={`app-sidebar-backdrop ${isMobileNavOpen ? 'app-sidebar-backdrop-visible' : ''}`}
+          onClick={() => setIsMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+        <aside id="app-sidebar" className={`app-sidebar ${isMobileNavOpen ? 'app-sidebar-open' : ''}`}>
+          <p className="eyebrow">{copy.nav.eyebrow}</p>
+          <h2 className="app-sidebar-title">{copy.nav.title}</h2>
+          <div className="app-nav">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`pill ${view === item.id ? 'pill-active' : 'pill-ghost'}`}
+                onClick={() => handleViewChange(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+        <main className="app-main">
+          {view === 'map' ? <MapView /> : null}
+          {view === 'worldwide' ? <WorldwideView /> : null}
+          {view === 'charts' ? <ChartsView /> : null}
+          {view === 'compare' ? <CompareView /> : null}
+          {view === 'about' ? <AboutView /> : null}
+          {view === 'faq' ? <FaqView /> : null}
+          {view === 'settings' ? <SettingsView /> : null}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <PreferencesProvider>
+        <AppShell />
+      </PreferencesProvider>
     </QueryClientProvider>
   );
 }

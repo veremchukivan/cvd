@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { DateMode, DateRange, Metric } from '../../types/map';
 import DatePickerInput from './DatePickerInput';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../../lib/metricOptions';
+import { usePreferences } from '../../state/preferences';
 
 type QuickLabel = '7d' | '30d' | 'ytd';
 
@@ -36,17 +37,18 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onQuickRange,
   onReset,
 }) => {
-  const metricOptions = metricOptionsForDateMode(dateMode);
+  const { copy, locale } = usePreferences();
+  const metricOptions = metricOptionsForDateMode(dateMode, locale);
 
   useEffect(() => {
-    if (isMetricAllowedForDateMode(metric, dateMode)) {
+    if (isMetricAllowedForDateMode(metric, dateMode, locale)) {
       return;
     }
     const fallback = metricOptions[0]?.value;
     if (fallback) {
       onMetricChange(fallback);
     }
-  }, [dateMode, metric, metricOptions, onMetricChange]);
+  }, [dateMode, locale, metric, metricOptions, onMetricChange]);
 
   const handleRangeInput = (key: keyof DateRange) =>
     (nextValue: string) => {
@@ -62,7 +64,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div className="filter-bar">
       <div className="filter-group">
-        <label className="filter-label">Metric</label>
+        <label className="filter-label">{copy.filters.metric}</label>
         <select
           value={metric}
           onChange={(e) => onMetricChange(e.target.value as Metric)}
@@ -77,8 +79,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       </div>
 
       <div className="filter-group">
-        <label className="filter-label">View mode</label>
-        <div className="mode-toggle" role="group" aria-label="Date mode">
+        <label className="filter-label">{copy.filters.viewMode}</label>
+        <div className="mode-toggle" role="group" aria-label={copy.filters.dateMode}>
           {(['day', 'range', 'total'] as DateMode[]).map((mode) => (
             <button
               key={mode}
@@ -86,7 +88,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               onClick={() => onDateModeChange(mode)}
               type="button"
             >
-              {mode === 'day' ? 'Single day' : mode === 'range' ? 'Period' : 'Total'}
+              {mode === 'day'
+                ? copy.filters.singleDay
+                : mode === 'range'
+                  ? copy.filters.period
+                  : copy.filters.total}
             </button>
           ))}
         </div>
@@ -94,17 +100,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
       {dateMode === 'day' ? (
         <div className="filter-group">
-          <label className="filter-label">Date</label>
+          <label className="filter-label">{copy.filters.date}</label>
           <DatePickerInput value={date} onChange={onDateChange} />
-          <div className="mode-toggle" role="group" aria-label="Single day controls">
+          <div className="mode-toggle" role="group" aria-label={copy.filters.singleDay}>
             <button type="button" className="pill pill-ghost" onClick={setToday}>
-              Today
+              {copy.filters.today}
             </button>
           </div>
         </div>
       ) : dateMode === 'range' ? (
         <div className="filter-group range-group">
-          <label className="filter-label">Date range</label>
+          <label className="filter-label">{copy.filters.dateRange}</label>
           <div className="range-inputs">
             <DatePickerInput
               value={range.from}
@@ -118,7 +124,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               onChange={handleRangeInput('to')}
             />
           </div>
-          <div className="mode-toggle" role="group" aria-label="Quick ranges">
+          <div className="mode-toggle" role="group" aria-label={copy.filters.periodWindow}>
             {quickOptions.map((btn) => (
               <button
                 key={btn.value}
@@ -133,17 +139,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
       ) : (
         <div className="filter-group">
-          <label className="filter-label">Date range</label>
-          <div className="mode-toggle" role="note" aria-label="Total mode">
-            <span className="pill pill-ghost">All-time aggregate (without dates)</span>
+          <label className="filter-label">{copy.filters.dateRange}</label>
+          <div className="mode-toggle" role="note" aria-label={copy.filters.total}>
+            <span className="pill pill-ghost">{copy.filters.allTimeAggregate}</span>
           </div>
         </div>
       )}
 
       <div className="filter-group">
-        <label className="filter-label">Reset</label>
+        <label className="filter-label">{copy.filters.reset}</label>
         <button type="button" className="pill pill-ghost" onClick={onReset}>
-          Clear filters
+          {copy.filters.clearFilters}
         </button>
       </div>
     </div>

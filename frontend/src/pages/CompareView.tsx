@@ -13,10 +13,12 @@ import {
   quickRangeBounds,
 } from '../lib/analytics';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
+import { usePreferences } from '../state/preferences';
 import { CountryOption } from '../types/country';
 import { CountryDetailsResponse, DateMode, DateRange, Metric, SummaryMetric } from '../types/map';
 
 const CompareView: React.FC = () => {
+  const { copy, locale } = usePreferences();
   const today = formatISO(new Date(), { representation: 'date' });
   const [metric, setMetric] = useState<Metric>('cases');
   const [dateMode, setDateMode] = useState<DateMode>('day');
@@ -33,7 +35,7 @@ const CompareView: React.FC = () => {
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false);
   const primarySearchRef = useRef<HTMLDivElement | null>(null);
   const compareSearchRef = useRef<HTMLDivElement | null>(null);
-  const metricOptions = useMemo(() => metricOptionsForDateMode(dateMode), [dateMode]);
+  const metricOptions = useMemo(() => metricOptionsForDateMode(dateMode, locale), [dateMode, locale]);
 
   const countryOptionsQuery = useQuery({
     queryKey: ['compare-country-options'],
@@ -77,14 +79,14 @@ const CompareView: React.FC = () => {
   }, [compareIso, primaryIso]);
 
   useEffect(() => {
-    if (isMetricAllowedForDateMode(metric, dateMode)) {
+    if (isMetricAllowedForDateMode(metric, dateMode, locale)) {
       return;
     }
     const fallback = metricOptions[0]?.value;
     if (fallback) {
       setMetric(fallback);
     }
-  }, [dateMode, metric, metricOptions]);
+  }, [dateMode, locale, metric, metricOptions]);
 
   useEffect(() => {
     if (!primaryIso) {
@@ -169,8 +171,11 @@ const CompareView: React.FC = () => {
   const extraLoading = extraMetricQueries.some((item) => item.isLoading);
 
   const primaryName = useMemo(
-    () => countryOptions.find((item) => item.iso3 === primaryIso)?.name || primaryIso || 'Primary country',
-    [countryOptions, primaryIso]
+    () =>
+      countryOptions.find((item) => item.iso3 === primaryIso)?.name ||
+      primaryIso ||
+      copy.compare.defaultPrimaryCountry,
+    [copy.compare.defaultPrimaryCountry, countryOptions, primaryIso]
   );
   const compareName = useMemo(
     () => countryOptions.find((item) => item.iso3 === compareIso)?.name || compareIso || undefined,
@@ -178,17 +183,15 @@ const CompareView: React.FC = () => {
   );
 
   const periodLabel =
-    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : copy.compare.allTime;
 
   return (
     <div className="page compare-page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Country comparison</p>
-          <h1 className="title">Compare Countries</h1>
-          <p className="lede">
-            Compare two countries for a selected day or period with trend, gap, ratio, normalized index and share charts.
-          </p>
+          <p className="eyebrow">{copy.compare.eyebrow}</p>
+          <h1 className="title">{copy.compare.title}</h1>
+          <p className="lede">{copy.compare.lede}</p>
         </div>
       </header>
 
@@ -205,7 +208,7 @@ const CompareView: React.FC = () => {
         onQuickRange={(label) => setRange(quickRangeBounds(label))}
       >
         <CountrySearchSelect
-          label="Primary country"
+          label={copy.filters.primaryCountry}
           value={primarySearch}
           selectedIso3={primaryIso}
           suggestions={primarySuggestions}
@@ -219,13 +222,13 @@ const CompareView: React.FC = () => {
             setPrimaryIso(iso3);
             setPrimarySearch(name || '');
           }}
-          placeholder="Search primary country..."
-          toggleAriaLabel="Toggle primary country list"
+          placeholder={copy.filters.searchPrimaryPlaceholder}
+          toggleAriaLabel={copy.filters.togglePrimaryCountryList}
           containerRef={primarySearchRef}
         />
 
         <CountrySearchSelect
-          label="Compare with"
+          label={copy.filters.compareWith}
           value={compareSearch}
           selectedIso3={compareIso}
           suggestions={compareSuggestions}
@@ -239,14 +242,14 @@ const CompareView: React.FC = () => {
             setCompareIso(iso3);
             setCompareSearch(name || '');
           }}
-          placeholder="Search second country..."
-          toggleAriaLabel="Toggle compare country list"
+          placeholder={copy.filters.searchSecondPlaceholder}
+          toggleAriaLabel={copy.filters.toggleCompareCountryList}
           containerRef={compareSearchRef}
           showNoneOption
         />
       </CompareFilters>
 
-      {mainError ? <div className="banner banner-error">Unable to load comparison data.</div> : null}
+      {mainError ? <div className="banner banner-error">{copy.compare.bannerError}</div> : null}
 
       <CompareTrendChart
         metric={summaryMetric}

@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatNumericValue } from '../../lib/i18n';
+import { usePreferences } from '../../state/preferences';
 
 interface LegendProps {
   maxValue: number;
@@ -21,14 +23,14 @@ function formatLegendValue(value: number): string {
   }
 
   if (value >= 1000) {
-    return new Intl.NumberFormat('en-US', {
+    return formatNumericValue(value, undefined, {
       notation: 'compact',
       maximumFractionDigits: 1,
-    }).format(value);
+    });
   }
 
   if (value >= 100) {
-    return Math.round(value).toLocaleString('en-US');
+    return formatNumericValue(Math.round(value));
   }
 
   if (value >= 10) {
@@ -39,6 +41,7 @@ function formatLegendValue(value: number): string {
 }
 
 export const Legend: React.FC<LegendProps> = ({ maxValue, metricLabel }) => {
+  const { copy } = usePreferences();
   const safeMax = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : 0;
   const ticks = TICK_RATIOS.map((ratio) => safeMax * ratio);
 
@@ -64,11 +67,11 @@ export const Legend: React.FC<LegendProps> = ({ maxValue, metricLabel }) => {
       <div className="legend-statuses">
         <div className="legend-status">
           <span className="legend-no-data-swatch" aria-hidden />
-          <span>No data</span>
+          <span>{copy.map.legendNoData}</span>
         </div>
         <div className="legend-status">
           <span className="legend-selected-swatch" aria-hidden />
-          <span>Selected country</span>
+          <span>{copy.map.legendSelectedCountry}</span>
         </div>
       </div>
     </div>

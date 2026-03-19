@@ -1,43 +1,32 @@
 import { DateMode, Metric } from '../types/map';
+import { LocaleCode, metricOptionLabel } from './i18n';
 
 export type MetricOption = {
   label: string;
   value: Metric;
 };
 
-const DAY_METRIC_OPTIONS: MetricOption[] = [
-  { label: 'Cases (daily)', value: 'cases' },
-  { label: 'Deaths (daily)', value: 'deaths' },
-  { label: 'Recovered (daily)', value: 'recovered' },
-  { label: 'Mortality (%)', value: 'mortality' },
-];
+const DAY_METRICS: Metric[] = ['cases', 'deaths', 'recovered', 'mortality'];
+const RANGE_EXTRA_METRICS: Metric[] = ['active', 'tests'];
+const TOTAL_EXTRA_METRICS: Metric[] = ['vaccinations_total', ...RANGE_EXTRA_METRICS];
 
-const RANGE_EXTRA_OPTIONS: MetricOption[] = [
-  { label: 'Active', value: 'active' },
-  { label: 'Tests', value: 'tests' },
-];
-
-const RANGE_METRIC_OPTIONS: MetricOption[] = [
-  ...DAY_METRIC_OPTIONS,
-  ...RANGE_EXTRA_OPTIONS,
-];
-
-const TOTAL_METRIC_OPTIONS: MetricOption[] = [
-  ...DAY_METRIC_OPTIONS,
-  { label: 'Vaccinations (total)', value: 'vaccinations_total' },
-  ...RANGE_EXTRA_OPTIONS,
-];
-
-export function metricOptionsForDateMode(dateMode: DateMode): MetricOption[] {
-  if (dateMode === 'day') {
-    return DAY_METRIC_OPTIONS;
-  }
-  if (dateMode === 'range') {
-    return RANGE_METRIC_OPTIONS;
-  }
-  return TOTAL_METRIC_OPTIONS;
+function buildMetricOptions(metrics: Metric[], locale?: LocaleCode): MetricOption[] {
+  return metrics.map((value) => ({
+    value,
+    label: metricOptionLabel(value, locale),
+  }));
 }
 
-export function isMetricAllowedForDateMode(metric: Metric, dateMode: DateMode): boolean {
-  return metricOptionsForDateMode(dateMode).some((item) => item.value === metric);
+export function metricOptionsForDateMode(dateMode: DateMode, locale?: LocaleCode): MetricOption[] {
+  if (dateMode === 'day') {
+    return buildMetricOptions(DAY_METRICS, locale);
+  }
+  if (dateMode === 'range') {
+    return buildMetricOptions([...DAY_METRICS, ...RANGE_EXTRA_METRICS], locale);
+  }
+  return buildMetricOptions([...DAY_METRICS, ...TOTAL_EXTRA_METRICS], locale);
+}
+
+export function isMetricAllowedForDateMode(metric: Metric, dateMode: DateMode, locale?: LocaleCode): boolean {
+  return metricOptionsForDateMode(dateMode, locale).some((item) => item.value === metric);
 }

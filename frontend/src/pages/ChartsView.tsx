@@ -16,23 +16,25 @@ import ChartsFilterPanel from '../components/charts/ChartsFilterPanel';
 import ChartsMetricCardsSection from '../components/charts/ChartsMetricCardsSection';
 import ChartsOverviewSection from '../components/charts/ChartsOverviewSection';
 import { countryMatches, maybeBuildCountryQuery, quickRangeBounds } from '../lib/analytics';
+import { findCountryIso3ByCoordinates, guessCountryIso3FromBrowser } from '../lib/geoCountry';
+import { LocaleCode, summaryMetricLabel } from '../lib/i18n';
 import { CountryOption } from '../types/country';
 import { CountryDetailsResponse, DateMode, DateRange, SummaryMetric } from '../types/map';
+import { usePreferences } from '../state/preferences';
 
-const BASE_CHART_METRIC_CARDS: Array<{ metric: SummaryMetric; label: string }> = [
-  { metric: 'today_cases', label: 'Cases (daily)' },
-  { metric: 'today_deaths', label: 'Deaths (daily)' },
-  { metric: 'active', label: 'Active (total)' },
-  { metric: 'mortality', label: 'Mortality (%)' },
-];
-
-function chartMetricCardsForMode(dateMode: DateMode): Array<{ metric: SummaryMetric; label: string }> {
+function chartMetricCardsForMode(dateMode: DateMode, locale?: LocaleCode): Array<{ metric: SummaryMetric; label: string }> {
+  const baseCards: Array<{ metric: SummaryMetric; label: string }> = [
+    { metric: 'today_cases', label: summaryMetricLabel('today_cases', locale) },
+    { metric: 'today_deaths', label: summaryMetricLabel('today_deaths', locale) },
+    { metric: 'active', label: summaryMetricLabel('active', locale) },
+    { metric: 'mortality', label: summaryMetricLabel('mortality', locale) },
+  ];
   if (dateMode !== 'total') {
-    return BASE_CHART_METRIC_CARDS;
+    return baseCards;
   }
   return [
-    ...BASE_CHART_METRIC_CARDS,
-    { metric: 'vaccinations_total', label: 'Vaccinations (total)' },
+    ...baseCards,
+    { metric: 'vaccinations_total', label: summaryMetricLabel('vaccinations_total', locale) },
   ];
 }
 
@@ -85,6 +87,7 @@ function findPeak(series: Array<{ date: string; value: number | null }> | undefi
 }
 
 const ChartsView: React.FC = () => {
+  const { copy, locale } = usePreferences();
   const today = formatISO(new Date(), { representation: 'date' });
   const [dateMode, setDateMode] = useState<DateMode>('day');
   const [date, setDate] = useState(today);
@@ -96,9 +99,15 @@ const ChartsView: React.FC = () => {
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const countrySearchRef = useRef<HTMLDivElement | null>(null);
-  const chartMetricCards = useMemo(() => chartMetricCardsForMode(dateMode), [dateMode]);
+  const countryIsoRef = useRef<string | null>(null);
+  const initialCountryResolvedRef = useRef(false);
+  const chartMetricCards = useMemo(() => chartMetricCardsForMode(dateMode, locale), [dateMode, locale]);
   const vaccinationsEnabled = dateMode === 'total';
   const vaccinationMetric: SummaryMetric | null = vaccinationsEnabled ? 'vaccinations_total' : null;
+
+  useEffect(() => {
+    countryIsoRef.current = countryIso;
+  }, [countryIso]);
 
   const countryOptionsQuery = useQuery({
     queryKey: ['charts-country-options'],
@@ -124,9 +133,69 @@ const ChartsView: React.FC = () => {
   }, [countryOptions, countrySearch]);
 
   useEffect(() => {
-    if (countryIso || !countryOptions.length) return;
-    const usa = countryOptions.find((item) => item.iso3 === 'USA');
-    setCountryIso((usa || countryOptions[0]).iso3);
+    if (countryIso || !countryOptions.length || initialCountryResolvedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    const browserGuess = guessCountryIso3FromBrowser();
+
+    const applyCountrySelection = (preferredIso?: string | null) => {
+      if (cancelled || countryIsoRef.current || initialCountryResolvedRef.current) {
+        return;
+      }
+
+      const normalizedIso = preferredIso?.trim().toUpperCase();
+      const match = normalizedIso
+        ? countryOptions.find((item) => item.iso3 === normalizedIso)
+        : null;
+      const browserMatch = browserGuess
+        ? countryOptions.find((item) => item.iso3 === browserGuess)
+        : null;
+      const fallback = countryOptions.find((item) => item.iso3 === 'USA') || countryOptions[0];
+      const selected = match || browserMatch || fallback;
+
+      if (!selected) {
+        return;
+      }
+
+      initialCountryResolvedRef.current = true;
+      setCountryIso(selected.iso3);
+      setCountrySearch(selected.name);
+    };
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      applyCountrySelection(browserGuess);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const detectedIso = await findCountryIso3ByCoordinates(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          applyCountrySelection(detectedIso || guessCountryIso3FromBrowser());
+        } catch {
+          applyCountrySelection(guessCountryIso3FromBrowser());
+        }
+      },
+      () => {
+        applyCountrySelection(guessCountryIso3FromBrowser());
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 30 * 60 * 1000,
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
   }, [countryIso, countryOptions]);
 
   useEffect(() => {
@@ -157,11 +226,11 @@ const ChartsView: React.FC = () => {
 
   const hasError = metricQueries.some((item) => Boolean(item.error));
   const selectedCountryName = useMemo(
-    () => countryOptions.find((item) => item.iso3 === countryIso)?.name || countryIso || 'Country',
-    [countryOptions, countryIso]
+    () => countryOptions.find((item) => item.iso3 === countryIso)?.name || countryIso || copy.charts.defaultCountry,
+    [copy.charts.defaultCountry, countryOptions, countryIso]
   );
   const periodLabel =
-    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : copy.charts.allTime;
 
   const metricData = chartMetricCards.reduce<Partial<Record<SummaryMetric, CountryDetailsResponse>>>(
     (acc, item, index) => {
@@ -424,11 +493,9 @@ const ChartsView: React.FC = () => {
     <div className="page compare-page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Country analytics</p>
-          <h1 className="title">Country Graphs</h1>
-          <p className="lede">
-            Explore flow, weekly rhythm and outcome mix for one country in a selected day, period, or total mode.
-          </p>
+          <p className="eyebrow">{copy.charts.eyebrow}</p>
+          <h1 className="title">{copy.charts.title}</h1>
+          <p className="lede">{copy.charts.lede}</p>
         </div>
       </header>
 
@@ -453,7 +520,7 @@ const ChartsView: React.FC = () => {
         countrySearchRef={countrySearchRef}
       />
 
-      {hasError ? <div className="banner banner-error">Unable to load one or more country metrics.</div> : null}
+      {hasError ? <div className="banner banner-error">{copy.charts.bannerError}</div> : null}
 
       <ChartsOverviewSection
         selectedCountryName={selectedCountryName}

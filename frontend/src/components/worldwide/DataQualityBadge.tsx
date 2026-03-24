@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePreferences } from '../../state/preferences';
 import { GroupBy, SummaryDataQuality } from '../../types/map';
 
 type DataQualityBadgeProps = {
@@ -7,31 +8,32 @@ type DataQualityBadgeProps = {
 };
 
 const DataQualityBadge: React.FC<DataQualityBadgeProps> = ({ quality, rankGroupBy }) => {
-  const source = quality?.primarySource || quality?.sources?.[0]?.source || 'Unknown';
+  const { copy } = usePreferences();
+  const source = quality?.primarySource || quality?.sources?.[0]?.source || copy.worldwide.unknown;
   const latest = quality?.overallLatest || '—';
   const metrics = quality?.metrics?.join(', ') || '—';
-  const scope = rankGroupBy === 'continent' ? 'Continents' : 'Countries';
+  const scope = rankGroupBy === 'continent' ? copy.worldwide.exportContinents : copy.worldwide.exportCountries;
 
   return (
     <section className="world-quality-card">
       <div className="chart-header">
-        <p className="panel-kicker">Data quality</p>
+        <p className="panel-kicker">{copy.worldwide.dataQuality}</p>
       </div>
       <div className="world-quality-grid">
         <div>
-          <p className="world-quality-label">Scope</p>
+          <p className="world-quality-label">{copy.worldwide.scope}</p>
           <p className="world-quality-value">{scope}</p>
         </div>
         <div>
-          <p className="world-quality-label">Primary source</p>
+          <p className="world-quality-label">{copy.worldwide.primarySource}</p>
           <p className="world-quality-value">{source}</p>
         </div>
         <div>
-          <p className="world-quality-label">Latest update</p>
+          <p className="world-quality-label">{copy.worldwide.latestUpdate}</p>
           <p className="world-quality-value">{latest}</p>
         </div>
         <div>
-          <p className="world-quality-label">Metrics used</p>
+          <p className="world-quality-label">{copy.worldwide.metricsUsed}</p>
           <p className="world-quality-value world-quality-metrics">{metrics}</p>
         </div>
       </div>

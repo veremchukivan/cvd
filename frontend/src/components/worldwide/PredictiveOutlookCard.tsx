@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatNumericValue, LocaleCode } from '../../lib/i18n';
+import { usePreferences } from '../../state/preferences';
 
 type SeriesPoint = {
   date: string;
@@ -56,21 +58,15 @@ function computeForecast(series?: SeriesPoint[]): Forecast | null {
   };
 }
 
-function formatValue(value?: number): string {
+function formatValue(value: number | null | undefined, locale?: LocaleCode): string {
   if (value === null || value === undefined) {
     return '—';
   }
-  return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatNumericValue(value, locale, { maximumFractionDigits: 2 });
 }
 
-function trendLabel(trend: Forecast['trend']): string {
-  if (trend === 'up') {
-    return 'Uptrend';
-  }
-  if (trend === 'down') {
-    return 'Downtrend';
-  }
-  return 'Stable';
+function trendLabel(trend: Forecast['trend'], labels: Record<Forecast['trend'], string>): string {
+  return labels[trend];
 }
 
 const PredictiveOutlookCard: React.FC<PredictiveOutlookCardProps> = ({
@@ -78,25 +74,40 @@ const PredictiveOutlookCard: React.FC<PredictiveOutlookCardProps> = ({
   casesSeries,
   deathsSeries,
 }) => {
+  const { copy, locale } = usePreferences();
+  const labels: Record<Forecast['trend'], string> = {
+    up: copy.worldwide.uptrend,
+    down: copy.worldwide.downtrend,
+    flat: copy.worldwide.stable,
+  };
+
   const casesForecast = computeForecast(casesSeries);
   const deathsForecast = computeForecast(deathsSeries);
 
   return (
     <section className="world-predict-card">
       <div className="chart-header">
-        <p className="panel-kicker">Predictive outlook (beta)</p>
+        <p className="panel-kicker">{copy.worldwide.predictiveOutlook}</p>
       </div>
-      <p className="world-export-hint">Based on linear trend from recent daily values • {periodLabel}</p>
+      <p className="world-export-hint">
+        {copy.worldwide.predictiveHint} • {periodLabel}
+      </p>
       <div className="world-predict-grid">
         <div className="world-predict-item">
-          <p className="world-quality-label">Cases next day</p>
-          <p className="world-quality-value">{formatValue(casesForecast?.nextDay)}</p>
-          <p className="world-kpi-hint">7d: {formatValue(casesForecast?.inSevenDays)} • {trendLabel(casesForecast?.trend || 'flat')}</p>
+          <p className="world-quality-label">{copy.worldwide.casesNextDay}</p>
+          <p className="world-quality-value">{formatValue(casesForecast?.nextDay, locale)}</p>
+          <p className="world-kpi-hint">
+            {copy.worldwide.in7d}: {formatValue(casesForecast?.inSevenDays, locale)} •{' '}
+            {trendLabel(casesForecast?.trend || 'flat', labels)}
+          </p>
         </div>
         <div className="world-predict-item">
-          <p className="world-quality-label">Deaths next day</p>
-          <p className="world-quality-value">{formatValue(deathsForecast?.nextDay)}</p>
-          <p className="world-kpi-hint">7d: {formatValue(deathsForecast?.inSevenDays)} • {trendLabel(deathsForecast?.trend || 'flat')}</p>
+          <p className="world-quality-label">{copy.worldwide.deathsNextDay}</p>
+          <p className="world-quality-value">{formatValue(deathsForecast?.nextDay, locale)}</p>
+          <p className="world-kpi-hint">
+            {copy.worldwide.in7d}: {formatValue(deathsForecast?.inSevenDays, locale)} •{' '}
+            {trendLabel(deathsForecast?.trend || 'flat', labels)}
+          </p>
         </div>
       </div>
     </section>

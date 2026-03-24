@@ -24,7 +24,7 @@ const ChartsOverviewSection: React.FC<ChartsOverviewSectionProps> = ({
   deathsPeak,
   mortalityPeak,
 }) => {
-  const { copy } = usePreferences();
+  const { copy, locale } = usePreferences();
 
   return (
     <div className="charts-section">
@@ -43,17 +43,17 @@ const ChartsOverviewSection: React.FC<ChartsOverviewSectionProps> = ({
       <div className="country-insight-grid">
         <div className="country-insight-card">
           <p className="stat-label">{copy.charts.peakDailyCases}</p>
-          <p className="country-insight-value">{formatSummaryValue('today_cases', casesPeak?.value)}</p>
+          <p className="country-insight-value">{formatSummaryValue('today_cases', casesPeak?.value, locale)}</p>
           <p className="stat-hint">{casesPeak?.date || copy.charts.noPeakData}</p>
         </div>
         <div className="country-insight-card">
           <p className="stat-label">{copy.charts.peakDailyDeaths}</p>
-          <p className="country-insight-value">{formatSummaryValue('today_deaths', deathsPeak?.value)}</p>
+          <p className="country-insight-value">{formatSummaryValue('today_deaths', deathsPeak?.value, locale)}</p>
           <p className="stat-hint">{deathsPeak?.date || copy.charts.noPeakData}</p>
         </div>
         <div className="country-insight-card">
           <p className="stat-label">{copy.charts.peakMortality}</p>
-          <p className="country-insight-value">{formatSummaryValue('mortality', mortalityPeak?.value)}</p>
+          <p className="country-insight-value">{formatSummaryValue('mortality', mortalityPeak?.value, locale)}</p>
           <p className="stat-hint">{mortalityPeak?.date || copy.charts.noPeakData}</p>
         </div>
       </div>

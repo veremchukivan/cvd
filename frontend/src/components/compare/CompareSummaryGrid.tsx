@@ -22,21 +22,21 @@ const CompareSummaryGrid: React.FC<CompareSummaryGridProps> = ({
   compareHeadline,
   periodLabel,
 }) => {
-  const { copy } = usePreferences();
+  const { copy, locale } = usePreferences();
 
   return (
     <div className="compare-summary-grid">
       <div className="stat-tile">
         <p className="stat-label">{primaryName}</p>
-        <p className="stat-value">{formatSummaryValue(summaryMetric, primaryHeadline)}</p>
-        <p className="stat-hint">{summaryMetricLabel(summaryMetric)} • {periodLabel}</p>
+        <p className="stat-value">{formatSummaryValue(summaryMetric, primaryHeadline, locale)}</p>
+        <p className="stat-hint">{summaryMetricLabel(summaryMetric, locale)} • {periodLabel}</p>
       </div>
       <div className="stat-tile">
         <p className="stat-label">{compareName || copy.compare.compareCountry}</p>
-        <p className="stat-value">{formatSummaryValue(summaryMetric, compareHeadline)}</p>
+        <p className="stat-value">{formatSummaryValue(summaryMetric, compareHeadline, locale)}</p>
         <p className="stat-hint">
           {compareIso
-            ? `${summaryMetricLabel(summaryMetric)} • ${periodLabel}`
+            ? `${summaryMetricLabel(summaryMetric, locale)} • ${periodLabel}`
             : copy.compare.selectSecondCountry}
         </p>
       </div>

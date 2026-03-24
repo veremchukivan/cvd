@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { fetchSummaryExport, MapSummaryParams, SummaryExportFormat } from '../../api/map';
+import { usePreferences } from '../../state/preferences';
 import { GroupBy } from '../../types/map';
 
 type ExportPanelProps = {
@@ -19,13 +20,14 @@ function buildFilename(params: MapSummaryParams, format: SummaryExportFormat): s
 }
 
 const ExportPanel: React.FC<ExportPanelProps> = ({ params, periodLabel, rankMetricLabel, rankGroupBy }) => {
+  const { copy } = usePreferences();
   const [exporting, setExporting] = useState<SummaryExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const subtitle = useMemo(() => {
-    const level = rankGroupBy === 'continent' ? 'Continents' : 'Countries';
+    const level = rankGroupBy === 'continent' ? copy.worldwide.exportContinents : copy.worldwide.exportCountries;
     return `${level} • ${rankMetricLabel || params.metric} • ${periodLabel}`;
-  }, [params.metric, periodLabel, rankGroupBy, rankMetricLabel]);
+  }, [copy.worldwide.exportContinents, copy.worldwide.exportCountries, params.metric, periodLabel, rankGroupBy, rankMetricLabel]);
 
   const handleExport = async (format: SummaryExportFormat) => {
     setExporting(format);
@@ -41,7 +43,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ params, periodLabel, rankMetr
       document.body.removeChild(link);
       window.URL.revokeObjectURL(objectUrl);
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Failed to export data.');
+      setError(downloadError instanceof Error ? downloadError.message : copy.worldwide.exportFailed);
     } finally {
       setExporting(null);
     }
@@ -50,7 +52,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ params, periodLabel, rankMetr
   return (
     <section className="world-export-card">
       <div className="chart-header">
-        <p className="panel-kicker">Export current ranking</p>
+        <p className="panel-kicker">{copy.worldwide.exportCurrentRanking}</p>
       </div>
       <p className="world-export-hint">{subtitle}</p>
       <div className="world-export-actions">
@@ -60,7 +62,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ params, periodLabel, rankMetr
           disabled={Boolean(exporting)}
           onClick={() => handleExport('csv')}
         >
-          {exporting === 'csv' ? 'Exporting CSV…' : 'Download CSV'}
+          {exporting === 'csv' ? copy.worldwide.exportingCsv : copy.worldwide.downloadCsv}
         </button>
         <button
           type="button"
@@ -68,7 +70,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ params, periodLabel, rankMetr
           disabled={Boolean(exporting)}
           onClick={() => handleExport('json')}
         >
-          {exporting === 'json' ? 'Exporting JSON…' : 'Download JSON'}
+          {exporting === 'json' ? copy.worldwide.exportingJson : copy.worldwide.downloadJson}
         </button>
       </div>
       {error ? <p className="world-export-error">{error}</p> : null}

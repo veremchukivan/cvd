@@ -2,53 +2,60 @@ import React from 'react';
 import Plot from '../common/Plot';
 import { useCountryDetails } from '../../hooks/useCountryDetails';
 import { useCountryProvinces } from '../../hooks/useCountryProvinces';
+import { formatNumericValue, LocaleCode, metricLabel, summaryMetricLabel } from '../../lib/i18n';
+import { usePreferences } from '../../state/preferences';
 import { CountryDetailsQuery, DateMode, DateRange, Metric, SummaryMetric } from '../../types/map';
 
-const metricLabels: Record<Metric, string> = {
-  cases: 'Cases',
-  deaths: 'Deaths',
-  recovered: 'Recovered',
-  vaccinations_total: 'Vaccinations',
-  active: 'Active',
-  tests: 'Tests',
-  incidence: 'Incidence',
-  mortality: 'Mortality',
-};
-
 const dailyPeakCards = [
-  { key: 'cases', metric: 'cases', label: 'Cases' },
-  { key: 'deaths', metric: 'deaths', label: 'Deaths' },
-  { key: 'vaccinations_total', metric: 'vaccinations_total', label: 'Vaccinations' },
-  { key: 'active', metric: 'active', label: 'Active' },
+  { key: 'cases', metric: 'cases' },
+  { key: 'deaths', metric: 'deaths' },
+  { key: 'vaccinations_total', metric: 'vaccinations_total' },
+  { key: 'active', metric: 'active' },
 ] as const;
 
 const coverageRows = [
-  { key: 'cases', label: 'Cases (total)' },
-  { key: 'deaths', label: 'Deaths (total)' },
-  { key: 'vaccinations_total', label: 'Vaccinations (total)' },
-  { key: 'people_vaccinated', label: 'People vaccinated' },
-  { key: 'people_fully_vaccinated', label: 'Fully vaccinated' },
-  { key: 'active', label: 'Active (total)' },
-  { key: 'today_cases', label: 'Cases (today)' },
-  { key: 'today_deaths', label: 'Deaths (today)' },
-  { key: 'today_vaccinations', label: 'Vaccinations (today)' },
+  'cases',
+  'deaths',
+  'vaccinations_total',
+  'people_vaccinated',
+  'people_fully_vaccinated',
+  'active',
+  'today_cases',
+  'today_deaths',
+  'today_vaccinations',
 ] as const;
 
-function formatMetricValue(metric: Metric, value: number | null | undefined): string {
+function formatMetricValue(metric: Metric, value: number | null | undefined, locale?: LocaleCode): string {
   if (value === null || value === undefined) return '—';
   if (metric === 'mortality') {
     return `${value.toFixed(2)}%`;
   }
-  return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatNumericValue(value, locale, { maximumFractionDigits: 2 });
 }
 
-function formatHeadline(metric: Metric, dateMode: DateMode, value: number | null | undefined): string {
+function formatHeadline(
+  metric: Metric,
+  dateMode: DateMode,
+  value: number | null | undefined,
+  locale?: LocaleCode
+): string {
   if (value === null || value === undefined) return '—';
   if (metric === 'mortality' && dateMode !== 'day') {
     const prefix = value > 0 ? '+' : '';
     return `${prefix}${value.toFixed(2)} pp`;
   }
-  return formatMetricValue(metric, value);
+  return formatMetricValue(metric, value, locale);
+}
+
+function formatCoverageLabel(
+  key: (typeof coverageRows)[number],
+  locale: LocaleCode,
+  peopleVaccinatedLabel: string,
+  fullyVaccinatedLabel: string
+): string {
+  if (key === 'people_vaccinated') return peopleVaccinatedLabel;
+  if (key === 'people_fully_vaccinated') return fullyVaccinatedLabel;
+  return summaryMetricLabel(key as SummaryMetric, locale);
 }
 
 function buildQuery(
@@ -90,13 +97,14 @@ type TrendChartProps = {
 };
 
 const TrendChart: React.FC<TrendChartProps> = ({ title, metric, series, isLoading }) => {
+  const { copy } = usePreferences();
   const hasSeries = Boolean(series?.length);
 
   return (
     <div className="trend-chart-card">
       <div className="chart-header">
         <p className="panel-kicker">{title}</p>
-        {isLoading && <span className="pill pill-ghost">Loading…</span>}
+        {isLoading && <span className="pill pill-ghost">{copy.common.loading}</span>}
       </div>
       {hasSeries ? (
         <div className="trend-plot-frame">
@@ -125,7 +133,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ title, metric, series, isLoadin
           />
         </div>
       ) : (
-        <div className="chart-placeholder">No {metricLabels[metric].toLowerCase()} data</div>
+        <div className="chart-placeholder">{copy.common.noData}</div>
       )}
     </div>
   );
@@ -154,6 +162,8 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
   range,
   onClose,
 }) => {
+  const { copy, locale } = usePreferences();
+  const panelCopy = copy.map.countryPanel;
   const resolvedIso = iso3 ?? iso ?? null;
   const detailsQuery = buildQuery(resolvedIso, metric, dateMode, date, range);
   const casesQuery = buildQuery(resolvedIso, 'cases', dateMode, date, range);
@@ -167,8 +177,8 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
 
   const seriesDateAnchor = dateMode === 'day' ? date : dateMode === 'range' ? range.to : undefined;
   const periodLabel =
-    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : 'All time';
-  const periodHint = dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} to ${range.to}` : 'All time';
+    dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : copy.map.allTime;
+  const periodHint = dateMode === 'day' ? date : dateMode === 'range' ? `${range.from} → ${range.to}` : copy.map.allTime;
   const provinces = useCountryProvinces({
     iso3: resolvedIso,
     countryName: details.data?.name || countryName,
@@ -177,12 +187,10 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
 
   if (!isOpen || !resolvedIso) {
     return (
-      <aside className="country-panel country-panel-empty" aria-label="Country details">
-        <p className="panel-kicker">Country details</p>
-        <h3 className="panel-title">Choose a country on the map</h3>
-        <p className="panel-subtitle">
-          Click any country to jump here with totals, one-day peaks, trends, and provinces.
-        </p>
+      <aside className="country-panel country-panel-empty" aria-label={panelCopy.ariaLabel}>
+        <p className="panel-kicker">{panelCopy.emptyKicker}</p>
+        <h3 className="panel-title">{panelCopy.emptyTitle}</h3>
+        <p className="panel-subtitle">{panelCopy.emptySubtitle}</p>
       </aside>
     );
   }
@@ -198,17 +206,17 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
     metric === 'incidence';
 
   return (
-    <aside className="country-panel" aria-label="Country details">
+    <aside className="country-panel" aria-label={panelCopy.ariaLabel}>
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">Selected country</p>
+          <p className="panel-kicker">{panelCopy.selectedCountry}</p>
           <h3 className="panel-title">{details.data?.name || countryName || resolvedIso}</h3>
           <p className="panel-subtitle">
-            {metricLabels[metric]} • {periodLabel}
+            {metricLabel(metric, locale)} • {periodLabel}
           </p>
         </div>
         <button className="pill pill-ghost" onClick={onClose} type="button">
-          Clear selection
+          {panelCopy.clearSelection}
         </button>
       </div>
 
@@ -216,62 +224,68 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
         <div className="stat-tile">
           <p className="stat-label">
             {dateMode === 'day'
-              ? 'Value on date'
+              ? panelCopy.valueOnDate
               : showsDailyFlowInHeadline
-                ? 'New in period'
-                : 'Change in period'}
+                ? panelCopy.newInPeriod
+                : panelCopy.changeInPeriod}
           </p>
-          <p className="stat-value">{formatHeadline(metric, dateMode, details.data?.headline)}</p>
+          <p className="stat-value">{formatHeadline(metric, dateMode, details.data?.headline, locale)}</p>
           <p className="stat-hint">{periodHint}</p>
         </div>
         <div className="stat-tile">
-          <p className="stat-label">Average</p>
-          <p className="stat-value">{formatMetricValue(metric, details.data?.average)}</p>
-          <p className="stat-hint">mean within window</p>
+          <p className="stat-label">{panelCopy.average}</p>
+          <p className="stat-value">{formatMetricValue(metric, details.data?.average, locale)}</p>
+          <p className="stat-hint">{panelCopy.averageHint}</p>
         </div>
         <div className="stat-tile">
-          <p className="stat-label">Peak</p>
-          <p className="stat-value">{formatMetricValue(metric, details.data?.max)}</p>
-          <p className="stat-hint">max daily</p>
+          <p className="stat-label">{panelCopy.peak}</p>
+          <p className="stat-value">{formatMetricValue(metric, details.data?.max, locale)}</p>
+          <p className="stat-hint">{panelCopy.peakHint}</p>
         </div>
       </div>
 
       {totals ? (
         <div className="chart-block">
           <div className="chart-header">
-            <p className="panel-kicker">Totals</p>
+            <p className="panel-kicker">{panelCopy.totals}</p>
             {coverage?.overallLatest ? (
-              <span className="pill pill-ghost">Latest report: {coverage.overallLatest}</span>
+              <span className="pill pill-ghost">
+                {panelCopy.latestReport}: {coverage.overallLatest}
+              </span>
             ) : null}
           </div>
           <div className="panel-grid">
             <div className="stat-tile">
-              <p className="stat-label">Cases</p>
-              <p className="stat-value">{formatMetricValue('cases', totals.cases)}</p>
+              <p className="stat-label">{summaryMetricLabel('cases', locale)}</p>
+              <p className="stat-value">{formatMetricValue('cases', totals.cases, locale)}</p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Deaths</p>
-              <p className="stat-value">{formatMetricValue('deaths', totals.deaths)}</p>
+              <p className="stat-label">{summaryMetricLabel('deaths', locale)}</p>
+              <p className="stat-value">{formatMetricValue('deaths', totals.deaths, locale)}</p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Vaccinations</p>
-              <p className="stat-value">{formatMetricValue('vaccinations_total', totals.vaccinations_total)}</p>
+              <p className="stat-label">{summaryMetricLabel('vaccinations_total', locale)}</p>
+              <p className="stat-value">
+                {formatMetricValue('vaccinations_total', totals.vaccinations_total, locale)}
+              </p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Fully vaccinated</p>
-              <p className="stat-value">{formatMetricValue('vaccinations_total', totals.people_fully_vaccinated)}</p>
+              <p className="stat-label">{panelCopy.fullyVaccinated}</p>
+              <p className="stat-value">
+                {formatMetricValue('vaccinations_total', totals.people_fully_vaccinated, locale)}
+              </p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Mortality</p>
-              <p className="stat-value">{formatMetricValue('mortality', totals.mortality)}</p>
+              <p className="stat-label">{summaryMetricLabel('mortality', locale)}</p>
+              <p className="stat-value">{formatMetricValue('mortality', totals.mortality, locale)}</p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Incidence (latest)</p>
-              <p className="stat-value">{formatMetricValue('incidence', totals.incidence)}</p>
+              <p className="stat-label">{panelCopy.incidenceLatest}</p>
+              <p className="stat-value">{formatMetricValue('incidence', totals.incidence, locale)}</p>
             </div>
             <div className="stat-tile">
-              <p className="stat-label">Active</p>
-              <p className="stat-value">{formatMetricValue('active', totals.active)}</p>
+              <p className="stat-label">{summaryMetricLabel('active', locale)}</p>
+              <p className="stat-value">{formatMetricValue('active', totals.active, locale)}</p>
             </div>
           </div>
         </div>
@@ -280,16 +294,16 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
       {dailyPeaks ? (
         <div className="chart-block">
           <div className="chart-header">
-            <p className="panel-kicker">Peak in one day</p>
+            <p className="panel-kicker">{panelCopy.peakInOneDay}</p>
           </div>
           <div className="panel-grid">
             {dailyPeakCards.map((card) => {
               const peak = dailyPeaks[card.key];
               return (
                 <div className="stat-tile" key={card.key}>
-                  <p className="stat-label">{card.label}</p>
-                  <p className="stat-value">{formatMetricValue(card.metric, peak?.value)}</p>
-                  <p className="stat-hint">{peak?.date || 'No daily peak'}</p>
+                  <p className="stat-label">{summaryMetricLabel(card.metric, locale)}</p>
+                  <p className="stat-value">{formatMetricValue(card.metric, peak?.value, locale)}</p>
+                  <p className="stat-hint">{peak?.date || panelCopy.noDailyPeak}</p>
                 </div>
               );
             })}
@@ -300,13 +314,13 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
       {coverage?.latestByMetric ? (
         <div className="recent-table">
           <div className="recent-header">
-            <p className="panel-kicker">Data coverage</p>
+            <p className="panel-kicker">{panelCopy.dataCoverage}</p>
           </div>
           <div className="recent-rows">
             {coverageRows.map((row) => (
-              <div className="recent-row" key={row.key}>
-                <span>{row.label}</span>
-                <span>{coverage.latestByMetric?.[row.key] || '—'}</span>
+              <div className="recent-row" key={row}>
+                <span>{formatCoverageLabel(row, locale, panelCopy.peopleVaccinated, panelCopy.fullyVaccinated)}</span>
+                <span>{coverage.latestByMetric?.[row] || '—'}</span>
               </div>
             ))}
           </div>
@@ -315,28 +329,26 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
 
       <div className="chart-block">
         <div className="chart-header">
-          <p className="panel-kicker">Cases, deaths and mortality trends</p>
-          {details.isLoading && <span className="pill pill-ghost">Loading…</span>}
+          <p className="panel-kicker">{panelCopy.trends}</p>
+          {details.isLoading && <span className="pill pill-ghost">{copy.common.loading}</span>}
         </div>
         {details.error && <div className="panel-error">{(details.error as Error).message}</div>}
-        {chartError && !details.error ? (
-          <div className="panel-error">Unable to load one or more trend series.</div>
-        ) : null}
+        {chartError && !details.error ? <div className="panel-error">{panelCopy.trendsError}</div> : null}
         <div className="trend-chart-grid">
           <TrendChart
-            title="Cases (daily)"
+            title={summaryMetricLabel('today_cases', locale)}
             metric="cases"
             series={cases.data?.series}
             isLoading={cases.isLoading}
           />
           <TrendChart
-            title="Deaths"
+            title={summaryMetricLabel('today_deaths', locale)}
             metric="deaths"
             series={deaths.data?.series}
             isLoading={deaths.isLoading}
           />
           <TrendChart
-            title="Mortality (%)"
+            title={summaryMetricLabel('mortality', locale)}
             metric="mortality"
             series={mortality.data?.series}
             isLoading={mortality.isLoading}
@@ -346,40 +358,40 @@ export const CountryPanel: React.FC<CountryPanelProps> = ({
 
       <div className="chart-block">
         <div className="chart-header">
-          <p className="panel-kicker">Provinces (cases)</p>
-          {provinces.isLoading && <span className="pill pill-ghost">Loading…</span>}
+          <p className="panel-kicker">{panelCopy.provinces}</p>
+          {provinces.isLoading && <span className="pill pill-ghost">{copy.common.loading}</span>}
         </div>
         {provinces.error ? (
-          <div className="panel-error">Unable to load province-level data.</div>
+          <div className="panel-error">{panelCopy.provincesError}</div>
         ) : provinceRows.length ? (
           <div className="recent-table">
             <div className="recent-header">
-              <p className="panel-kicker">Top provinces</p>
+              <p className="panel-kicker">{panelCopy.topProvinces}</p>
             </div>
             <div className="recent-rows">
               {provinceRows.map((row) => (
                 <div className="recent-row" key={row.code}>
                   <span>{row.name}</span>
-                  <span>{formatMetricValue('cases', row.value)}</span>
+                  <span>{formatMetricValue('cases', row.value, locale)}</span>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div className="chart-placeholder">No province-level data for this country.</div>
+          <div className="chart-placeholder">{panelCopy.noProvinceData}</div>
         )}
       </div>
 
       {details.data?.series?.length ? (
         <div className="recent-table">
           <div className="recent-header">
-            <p className="panel-kicker">Recent timeline</p>
+            <p className="panel-kicker">{panelCopy.recentTimeline}</p>
           </div>
           <div className="recent-rows">
             {details.data.series.slice(-7).map((row) => (
               <div className="recent-row" key={row.date}>
                 <span>{row.date}</span>
-                <span>{formatMetricValue(metric, row.value)}</span>
+                <span>{formatMetricValue(metric, row.value, locale)}</span>
               </div>
             ))}
           </div>

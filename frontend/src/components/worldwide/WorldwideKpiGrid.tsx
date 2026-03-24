@@ -1,5 +1,6 @@
 import React from 'react';
-import { formatSummaryValue } from '../../lib/analytics';
+import { formatSummaryValue, summaryMetricLabel } from '../../lib/analytics';
+import { usePreferences } from '../../state/preferences';
 
 type WorldwideKpiGridProps = {
   periodLabel: string;
@@ -23,41 +24,47 @@ const WorldwideKpiGrid: React.FC<WorldwideKpiGridProps> = ({
   mortalityHeadline,
   totalCases,
   totalCasesAsOf,
-}) => (
-  <div className="world-kpi-grid">
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">New cases</p>
-      <p className="world-kpi-value">{formatSummaryValue('today_cases', casesHeadline)}</p>
-      <p className="world-kpi-hint">{periodLabel}</p>
-    </div>
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">New deaths</p>
-      <p className="world-kpi-value">{formatSummaryValue('today_deaths', deathsHeadline)}</p>
-      <p className="world-kpi-hint">{periodLabel}</p>
-    </div>
-    {showVaccinationsTotal ? (
+}) => {
+  const { copy, locale } = usePreferences();
+
+  return (
+    <div className="world-kpi-grid">
       <div className="world-kpi-card">
-        <p className="world-kpi-label">Vaccinations (total)</p>
-        <p className="world-kpi-value">{formatSummaryValue('vaccinations_total', vaccinationsTotalHeadline)}</p>
+        <p className="world-kpi-label">{copy.worldwide.newCases}</p>
+        <p className="world-kpi-value">{formatSummaryValue('today_cases', casesHeadline, locale)}</p>
         <p className="world-kpi-hint">{periodLabel}</p>
       </div>
-    ) : null}
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">Active (total)</p>
-      <p className="world-kpi-value">{formatSummaryValue('active', activeHeadline)}</p>
-      <p className="world-kpi-hint">{periodLabel}</p>
+      <div className="world-kpi-card">
+        <p className="world-kpi-label">{copy.worldwide.newDeaths}</p>
+        <p className="world-kpi-value">{formatSummaryValue('today_deaths', deathsHeadline, locale)}</p>
+        <p className="world-kpi-hint">{periodLabel}</p>
+      </div>
+      {showVaccinationsTotal ? (
+        <div className="world-kpi-card">
+          <p className="world-kpi-label">{summaryMetricLabel('vaccinations_total', locale)}</p>
+          <p className="world-kpi-value">
+            {formatSummaryValue('vaccinations_total', vaccinationsTotalHeadline, locale)}
+          </p>
+          <p className="world-kpi-hint">{periodLabel}</p>
+        </div>
+      ) : null}
+      <div className="world-kpi-card">
+        <p className="world-kpi-label">{copy.worldwide.activeTotal}</p>
+        <p className="world-kpi-value">{formatSummaryValue('active', activeHeadline, locale)}</p>
+        <p className="world-kpi-hint">{periodLabel}</p>
+      </div>
+      <div className="world-kpi-card">
+        <p className="world-kpi-label">{summaryMetricLabel('mortality', locale)}</p>
+        <p className="world-kpi-value">{formatSummaryValue('mortality', mortalityHeadline, locale)}</p>
+        <p className="world-kpi-hint">{periodLabel}</p>
+      </div>
+      <div className="world-kpi-card">
+        <p className="world-kpi-label">{copy.worldwide.totalCases}</p>
+        <p className="world-kpi-value">{formatSummaryValue('cases', totalCases, locale)}</p>
+        <p className="world-kpi-hint">{totalCasesAsOf || '—'}</p>
+      </div>
     </div>
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">Mortality</p>
-      <p className="world-kpi-value">{formatSummaryValue('mortality', mortalityHeadline)}</p>
-      <p className="world-kpi-hint">{periodLabel}</p>
-    </div>
-    <div className="world-kpi-card">
-      <p className="world-kpi-label">Total cases</p>
-      <p className="world-kpi-value">{formatSummaryValue('cases', totalCases)}</p>
-      <p className="world-kpi-hint">{totalCasesAsOf || '—'}</p>
-    </div>
-  </div>
-);
+  );
+};
 
 export default WorldwideKpiGrid;

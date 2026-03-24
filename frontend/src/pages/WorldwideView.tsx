@@ -11,9 +11,11 @@ import WorldwideKpiGrid from '../components/worldwide/WorldwideKpiGrid';
 import {
   buildCountryQuery,
   formatSummaryValue,
+  summaryMetricLabel,
   metricToSummaryMetric,
   quickRangeBounds,
 } from '../lib/analytics';
+import { intlLocale } from '../lib/i18n';
 import { isMetricAllowedForDateMode, metricOptionsForDateMode } from '../lib/metricOptions';
 import { usePreferences } from '../state/preferences';
 import { CountryDetailsResponse, DateMode, DateRange, GroupBy, Metric, SummaryMetric } from '../types/map';
@@ -142,7 +144,7 @@ const WorldwideView: React.FC = () => {
         y: casesSeries.map((p) => p.value ?? null),
         type: 'scatter',
         mode: 'lines',
-        name: 'Cases (daily)',
+        name: summaryMetricLabel('today_cases', locale),
         line: { color: '#4de0ff', width: 2.6 },
         fill: 'tozeroy',
         fillcolor: 'rgba(77,224,255,0.12)',
@@ -154,7 +156,7 @@ const WorldwideView: React.FC = () => {
         y: deathsSeries.map((p) => p.value ?? null),
         type: 'scatter',
         mode: 'lines',
-        name: 'Deaths (daily)',
+        name: summaryMetricLabel('today_deaths', locale),
         line: { color: '#ff8a47', width: 2.3 },
       });
     }
@@ -164,12 +166,12 @@ const WorldwideView: React.FC = () => {
         y: vaccinationsSeries.map((p) => p.value ?? null),
         type: 'scatter',
         mode: 'lines',
-        name: 'Vaccinations (total)',
+        name: summaryMetricLabel('vaccinations_total', locale),
         line: { color: '#80ed99', width: 2.1, dash: 'dot' },
       });
     }
     return traces;
-  }, [casesSeries, deathsSeries, vaccinationsSeries]);
+  }, [casesSeries, deathsSeries, locale, vaccinationsSeries]);
 
   const momentumSeries = useMemo(() => casesSeries.slice(-84), [casesSeries]);
   const momentumDates = useMemo(() => momentumSeries.map((point) => point.date), [momentumSeries]);
@@ -195,23 +197,27 @@ const WorldwideView: React.FC = () => {
       return Number(avg.toFixed(2));
     });
   }, [casesSeries]);
+  const weekdayLabels = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(intlLocale(locale), { weekday: 'short' });
+    return weekdayOrder.map((_, index) => formatter.format(new Date(Date.UTC(2024, 0, index + 1))));
+  }, [locale]);
 
   const outcomeItems = useMemo(
     () => {
       const values = [
-        { label: 'Cases', value: toNumeric(casesData?.headline) || 0, color: '#4de0ff' },
-        { label: 'Deaths', value: toNumeric(deathsData?.headline) || 0, color: '#ff8a47' },
+        { label: summaryMetricLabel('today_cases', locale), value: toNumeric(casesData?.headline) || 0, color: '#4de0ff' },
+        { label: summaryMetricLabel('today_deaths', locale), value: toNumeric(deathsData?.headline) || 0, color: '#ff8a47' },
       ];
       if (vaccinationsEnabled) {
         values.push({
-          label: 'Vaccinations',
+          label: summaryMetricLabel('vaccinations_total', locale),
           value: toNumeric(vaccinationsData?.headline) || 0,
           color: '#80ed99',
         });
       }
       return values.filter((item) => item.value > 0);
     },
-    [casesData?.headline, deathsData?.headline, vaccinationsData?.headline, vaccinationsEnabled]
+    [casesData?.headline, deathsData?.headline, locale, vaccinationsData?.headline, vaccinationsEnabled]
   );
 
   const customSeriesByMetric = useMemo(
@@ -338,7 +344,7 @@ const WorldwideView: React.FC = () => {
           momentumDates={momentumDates}
           momentumValues={momentumValues}
           momentumMoving={momentumMoving}
-          weekdayLabels={[...weekdayOrder]}
+          weekdayLabels={weekdayLabels}
           weekdayValues={weekdayValues}
           outcomeItems={outcomeItems}
           customSeriesByMetric={customSeriesByMetric}

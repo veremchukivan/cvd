@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Plot from '../common/Plot';
 import { summaryMetricLabel } from '../../lib/analytics';
+import { usePreferences } from '../../state/preferences';
 import { SummaryMetric } from '../../types/map';
 
 type SeriesPoint = {
@@ -69,7 +70,13 @@ function sliceByWindow(series: SeriesPoint[], mode: WindowMode): SeriesPoint[] {
   return series.slice(-size);
 }
 
+function sameMetricSelection(left: SummaryMetric[], right: SummaryMetric[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((metric, index) => metric === right[index]);
+}
+
 const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMetric, periodLabel, loading }) => {
+  const { copy, locale } = usePreferences();
   const [selectedMetrics, setSelectedMetrics] = useState<SummaryMetric[]>(['today_cases', 'today_deaths']);
   const [chartStyle, setChartStyle] = useState<ChartStyle>('line');
   const [valueScale, setValueScale] = useState<ValueScale>('raw');
@@ -83,14 +90,21 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
         .filter((metric) => (seriesByMetric[metric]?.length || 0) > 0),
     [seriesByMetric]
   );
+  const availableMetricsSet = useMemo(() => new Set(availableMetrics), [availableMetrics]);
+  const deferredSelectedMetrics = useDeferredValue(selectedMetrics);
+  const deferredChartStyle = useDeferredValue(chartStyle);
+  const deferredValueScale = useDeferredValue(valueScale);
+  const deferredSmoothing = useDeferredValue(smoothing);
+  const deferredWindowMode = useDeferredValue(windowMode);
+  const deferredSeriesByMetric = useDeferredValue(seriesByMetric);
 
   useEffect(() => {
     setSelectedMetrics((prev) => {
-      const valid = prev.filter((metric) => availableMetrics.includes(metric));
-      if (valid.length) return valid;
-      return availableMetrics.slice(0, Math.min(2, availableMetrics.length));
+      const valid = prev.filter((metric) => availableMetricsSet.has(metric));
+      const next = valid.length ? valid : availableMetrics.slice(0, Math.min(2, availableMetrics.length));
+      return sameMetricSelection(prev, next) ? prev : next;
     });
-  }, [availableMetrics]);
+  }, [availableMetrics, availableMetricsSet]);
 
   const toggleMetric = (metric: SummaryMetric) => {
     setSelectedMetrics((prev) => {
@@ -106,20 +120,20 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
 
   const traces = useMemo(() => {
     return metricOptions
-      .filter((option) => selectedMetrics.includes(option.metric))
+      .filter((option) => deferredSelectedMetrics.includes(option.metric))
       .map((option) => {
-        const source = sliceByWindow(seriesByMetric[option.metric] || [], windowMode);
+        const source = sliceByWindow(deferredSeriesByMetric[option.metric] || [], deferredWindowMode);
         const dates = source.map((point) => point.date);
         const rawValues = source.map((point) => toNumeric(point.value));
-        const smoothValues = smoothing === 'ma7' ? movingAverage(rawValues, 7) : rawValues;
-        const values = valueScale === 'index' ? normalizeToBase100(smoothValues) : smoothValues;
+        const smoothValues = deferredSmoothing === 'ma7' ? movingAverage(rawValues, 7) : rawValues;
+        const values = deferredValueScale === 'index' ? normalizeToBase100(smoothValues) : smoothValues;
 
-        if (chartStyle === 'bar') {
+        if (deferredChartStyle === 'bar') {
           return {
             x: dates,
             y: values,
             type: 'bar',
-            name: summaryMetricLabel(option.metric),
+            name: summaryMetricLabel(option.metric, locale),
             marker: { color: option.color },
             opacity: 0.82,
           };
@@ -130,25 +144,35 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
           y: values,
           type: 'scatter',
           mode: 'lines',
-          name: summaryMetricLabel(option.metric),
+          name: summaryMetricLabel(option.metric, locale),
           line: { color: option.color, width: 2.3 },
-          fill: chartStyle === 'area' ? 'tozeroy' : undefined,
-          fillcolor: chartStyle === 'area' ? option.fillColor : undefined,
+          fill: deferredChartStyle === 'area' ? 'tozeroy' : undefined,
+          fillcolor: deferredChartStyle === 'area' ? option.fillColor : undefined,
         };
       })
       .filter((item) => (item.x?.length || 0) > 0);
-  }, [chartStyle, selectedMetrics, seriesByMetric, smoothing, valueScale, windowMode]);
+  }, [
+    deferredChartStyle,
+    deferredSelectedMetrics,
+    deferredSeriesByMetric,
+    deferredSmoothing,
+    deferredValueScale,
+    deferredWindowMode,
+    locale,
+  ]);
 
   return (
     <section className="world-chart-card world-chart-card-wide world-custom-card">
       <div className="chart-header">
-        <p className="panel-kicker">Custom chart builder • worldwide</p>
+        <p className="panel-kicker">
+          {copy.worldwide.customChartBuilder} • {copy.worldwide.worldwideLabel}
+        </p>
         <span className="pill pill-ghost">{periodLabel}</span>
       </div>
 
       <div className="world-custom-controls">
         <div className="custom-control-group">
-          <label className="filter-label">Metrics (up to 4)</label>
+          <label className="filter-label">{copy.worldwide.metricsUpTo4}</label>
           <div className="custom-chip-grid">
             {metricOptions.map((item) => {
               const selected = selectedMetrics.includes(item.metric);
@@ -163,7 +187,7 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
                   disabled={disabled}
                 >
                   <span className="custom-chip-dot" style={{ background: item.color }} />
-                  {summaryMetricLabel(item.metric)}
+                  {summaryMetricLabel(item.metric, locale)}
                 </button>
               );
             })}
@@ -172,74 +196,74 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
 
         <div className="world-custom-grid">
           <div className="custom-control-group">
-            <label className="filter-label">Style</label>
+            <label className="filter-label">{copy.worldwide.style}</label>
             <div className="mode-toggle">
               <button
                 type="button"
                 className={`pill ${chartStyle === 'line' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setChartStyle('line')}
               >
-                Line
+                {copy.charts.line}
               </button>
               <button
                 type="button"
                 className={`pill ${chartStyle === 'area' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setChartStyle('area')}
               >
-                Area
+                {copy.charts.area}
               </button>
               <button
                 type="button"
                 className={`pill ${chartStyle === 'bar' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setChartStyle('bar')}
               >
-                Bar
+                {copy.charts.bar}
               </button>
             </div>
           </div>
 
           <div className="custom-control-group">
-            <label className="filter-label">Scale</label>
+            <label className="filter-label">{copy.charts.scale}</label>
             <div className="mode-toggle">
               <button
                 type="button"
                 className={`pill ${valueScale === 'raw' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setValueScale('raw')}
               >
-                Raw
+                {copy.worldwide.raw}
               </button>
               <button
                 type="button"
                 className={`pill ${valueScale === 'index' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setValueScale('index')}
               >
-                Index 100
+                {copy.charts.index100}
               </button>
             </div>
           </div>
 
           <div className="custom-control-group">
-            <label className="filter-label">Smoothing</label>
+            <label className="filter-label">{copy.charts.smoothing}</label>
             <div className="mode-toggle">
               <button
                 type="button"
                 className={`pill ${smoothing === 'none' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setSmoothing('none')}
               >
-                None
+                {copy.charts.none}
               </button>
               <button
                 type="button"
                 className={`pill ${smoothing === 'ma7' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setSmoothing('ma7')}
               >
-                7-day avg
+                {copy.charts.movingAvg7}
               </button>
             </div>
           </div>
 
           <div className="custom-control-group">
-            <label className="filter-label">Window</label>
+            <label className="filter-label">{copy.worldwide.window}</label>
             <div className="mode-toggle">
               <button
                 type="button"
@@ -260,7 +284,7 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
                 className={`pill ${windowMode === 'all' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setWindowMode('all')}
               >
-                All
+                {copy.worldwide.all}
               </button>
             </div>
           </div>
@@ -282,12 +306,12 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
                 gridcolor: '#1f2937',
                 tickfont: { color: '#8ea0b7' },
                 title:
-                  valueScale === 'index'
-                    ? { text: 'Index (base 100)', font: { color: '#8ea0b7', size: 11 } }
+                  deferredValueScale === 'index'
+                    ? { text: copy.charts.indexBase100, font: { color: '#8ea0b7', size: 11 } }
                     : undefined,
               },
               legend: { orientation: 'h', y: 1.14, x: 0 },
-              barmode: chartStyle === 'bar' ? 'group' : undefined,
+              barmode: deferredChartStyle === 'bar' ? 'group' : undefined,
             }}
             config={{ displayModeBar: false, responsive: true }}
             useResizeHandler
@@ -296,7 +320,7 @@ const WorldwideCustomChart: React.FC<WorldwideCustomChartProps> = ({ seriesByMet
         </div>
       ) : (
         <div className="chart-placeholder">
-          {loading ? 'Loading data for custom chart…' : 'Select metrics with available data to build your chart.'}
+          {loading ? copy.worldwide.loadingCustomChart : copy.worldwide.selectMetricsWithData}
         </div>
       )}
     </section>

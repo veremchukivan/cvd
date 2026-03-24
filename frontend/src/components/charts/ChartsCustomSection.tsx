@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Plot from '../common/Plot';
 import { summaryMetricLabel } from '../../lib/analytics';
+import { usePreferences } from '../../state/preferences';
 import { SummaryMetric } from '../../types/map';
 
 type SeriesPoint = {
@@ -61,7 +62,13 @@ function normalizeToBase100(values: Array<number | null>): Array<number | null> 
   return values.map((item) => (item === null ? null : Number(((item / base) * 100).toFixed(2))));
 }
 
+function sameMetricSelection(left: SummaryMetric[], right: SummaryMetric[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((metric, index) => metric === right[index]);
+}
+
 const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCountryName, seriesByMetric }) => {
+  const { copy, locale } = usePreferences();
   const [selectedMetrics, setSelectedMetrics] = useState<SummaryMetric[]>(['today_cases', 'today_deaths']);
   const [chartStyle, setChartStyle] = useState<ChartStyle>('line');
   const [valueScale, setValueScale] = useState<ValueScale>('raw');
@@ -74,14 +81,20 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
         .filter((metric) => (seriesByMetric[metric]?.length || 0) > 0),
     [seriesByMetric]
   );
+  const availableMetricsSet = useMemo(() => new Set(availableMetrics), [availableMetrics]);
+  const deferredSelectedMetrics = useDeferredValue(selectedMetrics);
+  const deferredChartStyle = useDeferredValue(chartStyle);
+  const deferredValueScale = useDeferredValue(valueScale);
+  const deferredSmoothing = useDeferredValue(smoothing);
+  const deferredSeriesByMetric = useDeferredValue(seriesByMetric);
 
   useEffect(() => {
     setSelectedMetrics((prev) => {
-      const filtered = prev.filter((metric) => availableMetrics.includes(metric));
-      if (filtered.length) return filtered;
-      return availableMetrics.slice(0, Math.min(2, availableMetrics.length));
+      const filtered = prev.filter((metric) => availableMetricsSet.has(metric));
+      const next = filtered.length ? filtered : availableMetrics.slice(0, Math.min(2, availableMetrics.length));
+      return sameMetricSelection(prev, next) ? prev : next;
     });
-  }, [availableMetrics]);
+  }, [availableMetrics, availableMetricsSet]);
 
   const toggleMetric = (metric: SummaryMetric) => {
     setSelectedMetrics((prev) => {
@@ -97,19 +110,19 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
 
   const traces = useMemo(() => {
     return metricOptions
-      .filter((option) => selectedMetrics.includes(option.metric))
+      .filter((option) => deferredSelectedMetrics.includes(option.metric))
       .map((option) => {
-        const series = seriesByMetric[option.metric] || [];
+        const series = deferredSeriesByMetric[option.metric] || [];
         const dates = series.map((point) => point.date);
         const rawValues = series.map((point) => toNumeric(point.value));
-        const maybeSmoothed = smoothing === 'ma7' ? movingAverage(rawValues, 7) : rawValues;
-        const values = valueScale === 'index' ? normalizeToBase100(maybeSmoothed) : maybeSmoothed;
-        if (chartStyle === 'bar') {
+        const maybeSmoothed = deferredSmoothing === 'ma7' ? movingAverage(rawValues, 7) : rawValues;
+        const values = deferredValueScale === 'index' ? normalizeToBase100(maybeSmoothed) : maybeSmoothed;
+        if (deferredChartStyle === 'bar') {
           return {
             x: dates,
             y: values,
             type: 'bar',
-            name: summaryMetricLabel(option.metric),
+            name: summaryMetricLabel(option.metric, locale),
             marker: { color: option.color },
             opacity: 0.78,
           };
@@ -119,30 +132,39 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
           y: values,
           type: 'scatter',
           mode: 'lines',
-          name: summaryMetricLabel(option.metric),
+          name: summaryMetricLabel(option.metric, locale),
           line: { color: option.color, width: 2.3 },
-          fill: chartStyle === 'area' ? 'tozeroy' : undefined,
-          fillcolor: chartStyle === 'area' ? option.fillColor : undefined,
+          fill: deferredChartStyle === 'area' ? 'tozeroy' : undefined,
+          fillcolor: deferredChartStyle === 'area' ? option.fillColor : undefined,
         };
       })
       .filter((item) => (item.x?.length || 0) > 0);
-  }, [chartStyle, selectedMetrics, seriesByMetric, smoothing, valueScale]);
+  }, [
+    deferredChartStyle,
+    deferredSelectedMetrics,
+    deferredSeriesByMetric,
+    deferredSmoothing,
+    deferredValueScale,
+    locale,
+  ]);
 
   return (
     <div className="charts-section">
       <div className="charts-section-head">
-        <p className="charts-section-kicker">Custom chart</p>
-        <h2 className="charts-section-title">Build your own metric view</h2>
+        <p className="charts-section-kicker">{copy.charts.customChart}</p>
+        <h2 className="charts-section-title">{copy.charts.buildOwnMetricView}</h2>
       </div>
 
       <div className="country-chart-card country-chart-card-wide">
         <div className="chart-header">
-          <p className="panel-kicker">Custom metrics • {selectedCountryName}</p>
+          <p className="panel-kicker">
+            {copy.charts.customMetrics} • {selectedCountryName}
+          </p>
         </div>
 
         <div className="custom-chart-controls">
           <div className="custom-control-group">
-            <label className="filter-label">Variables (select up to 3)</label>
+            <label className="filter-label">{copy.charts.variablesUpTo3}</label>
             <div className="custom-chip-grid">
               {metricOptions.map((item) => {
                 const selected = selectedMetrics.includes(item.metric);
@@ -157,7 +179,7 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
                     disabled={disabled}
                   >
                     <span className="custom-chip-dot" style={{ background: item.color }} />
-                    {summaryMetricLabel(item.metric)}
+                    {summaryMetricLabel(item.metric, locale)}
                   </button>
                 );
               })}
@@ -166,68 +188,68 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
 
           <div className="custom-control-grid">
             <div className="custom-control-group">
-              <label className="filter-label">Chart style</label>
+              <label className="filter-label">{copy.charts.chartStyle}</label>
               <div className="mode-toggle">
                 <button
                   type="button"
                   className={`pill ${chartStyle === 'line' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setChartStyle('line')}
                 >
-                  Line
+                  {copy.charts.line}
                 </button>
                 <button
                   type="button"
                   className={`pill ${chartStyle === 'area' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setChartStyle('area')}
                 >
-                  Area
+                  {copy.charts.area}
                 </button>
                 <button
                   type="button"
                   className={`pill ${chartStyle === 'bar' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setChartStyle('bar')}
                 >
-                  Bar
+                  {copy.charts.bar}
                 </button>
               </div>
             </div>
 
             <div className="custom-control-group">
-              <label className="filter-label">Scale</label>
+              <label className="filter-label">{copy.charts.scale}</label>
               <div className="mode-toggle">
                 <button
                   type="button"
                   className={`pill ${valueScale === 'raw' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setValueScale('raw')}
                 >
-                  Raw values
+                  {copy.charts.rawValues}
                 </button>
                 <button
                   type="button"
                   className={`pill ${valueScale === 'index' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setValueScale('index')}
                 >
-                  Index (100)
+                  {copy.charts.index100}
                 </button>
               </div>
             </div>
 
             <div className="custom-control-group">
-              <label className="filter-label">Smoothing</label>
+              <label className="filter-label">{copy.charts.smoothing}</label>
               <div className="mode-toggle">
                 <button
                   type="button"
                   className={`pill ${smoothing === 'none' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setSmoothing('none')}
                 >
-                  None
+                  {copy.charts.none}
                 </button>
                 <button
                   type="button"
                   className={`pill ${smoothing === 'ma7' ? 'pill-active' : 'pill-ghost'}`}
                   onClick={() => setSmoothing('ma7')}
                 >
-                  7-day avg
+                  {copy.charts.movingAvg7}
                 </button>
               </div>
             </div>
@@ -249,12 +271,12 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
                   gridcolor: '#1f2937',
                   tickfont: { color: '#8ea0b7' },
                   title:
-                    valueScale === 'index'
-                      ? { text: 'Index (base 100)', font: { color: '#8ea0b7', size: 11 } }
+                    deferredValueScale === 'index'
+                      ? { text: copy.charts.indexBase100, font: { color: '#8ea0b7', size: 11 } }
                       : undefined,
                 },
                 legend: { orientation: 'h', y: 1.12, x: 0 },
-                barmode: chartStyle === 'bar' ? 'group' : undefined,
+                barmode: deferredChartStyle === 'bar' ? 'group' : undefined,
               }}
               config={{ displayModeBar: false, responsive: true }}
               useResizeHandler
@@ -262,7 +284,7 @@ const ChartsCustomSection: React.FC<ChartsCustomSectionProps> = ({ selectedCount
             />
           </div>
         ) : (
-          <div className="chart-placeholder">Select at least one metric with available data.</div>
+          <div className="chart-placeholder">{copy.charts.selectMetricPlaceholder}</div>
         )}
       </div>
     </div>

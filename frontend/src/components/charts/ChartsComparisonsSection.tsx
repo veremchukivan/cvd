@@ -1,6 +1,7 @@
 import React from 'react';
 import Plot from '../common/Plot';
 import { formatSummaryValue } from '../../lib/analytics';
+import { usePreferences } from '../../state/preferences';
 import { SummaryMetric } from '../../types/map';
 
 export type SplitMetricDatum = {
@@ -34,6 +35,8 @@ const ChartsComparisonsSection: React.FC<ChartsComparisonsSectionProps> = ({
   splitShare,
   pairComparisons,
 }) => {
+  const { copy, locale } = usePreferences();
+
   if (!splitData.length && !pairComparisons.length) {
     return null;
   }
@@ -41,13 +44,13 @@ const ChartsComparisonsSection: React.FC<ChartsComparisonsSectionProps> = ({
   return (
     <div className="charts-section">
       <div className="charts-section-head">
-        <p className="charts-section-kicker">Comparisons</p>
-        <h2 className="charts-section-title">Pair metric split</h2>
+        <p className="charts-section-kicker">{copy.charts.comparisons}</p>
+        <h2 className="charts-section-title">{copy.charts.pairMetricSplit}</h2>
       </div>
       <div className="metric-rings-grid">
         {splitData.length ? (
           <div className="metric-ring-card">
-            <p className="panel-kicker">Outcome split</p>
+            <p className="panel-kicker">{copy.charts.outcomeSplit}</p>
             <div className="outcome-split-layout">
               <div className="country-plot-frame outcome-split-plot">
                 <Plot
@@ -125,14 +128,14 @@ const ChartsComparisonsSection: React.FC<ChartsComparisonsSectionProps> = ({
                 <span className="metric-pair-dot" style={{ background: pair.left.color }} />
                 <span className="metric-pair-name">{pair.left.label}</span>
                 <span className="metric-pair-value">
-                  {formatSummaryValue(pair.left.metric, pair.left.value)} • {pair.leftPercent.toFixed(1)}%
+                  {formatSummaryValue(pair.left.metric, pair.left.value, locale)} • {pair.leftPercent.toFixed(1)}%
                 </span>
               </div>
               <div className="metric-pair-row">
                 <span className="metric-pair-dot" style={{ background: pair.right.color }} />
                 <span className="metric-pair-name">{pair.right.label}</span>
                 <span className="metric-pair-value">
-                  {formatSummaryValue(pair.right.metric, pair.right.value)} • {pair.rightPercent.toFixed(1)}%
+                  {formatSummaryValue(pair.right.metric, pair.right.value, locale)} • {pair.rightPercent.toFixed(1)}%
                 </span>
               </div>
             </div>

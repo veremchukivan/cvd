@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Plot from '../common/Plot';
 import { summaryMetricLabel } from '../../lib/analytics';
+import { usePreferences } from '../../state/preferences';
 import { CountryDetailsResponse, SummaryMetric } from '../../types/map';
 
 type CompareTrendChartProps = {
@@ -160,6 +161,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   secondaryName,
   loading,
 }) => {
+  const { copy, locale } = usePreferences();
   const primarySeries = useMemo(() => primary?.series ?? [], [primary?.series]);
   const secondarySeries = useMemo(() => secondary?.series ?? [], [secondary?.series]);
   const primaryVaccinationsSeries = useMemo(
@@ -227,7 +229,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   const customMeta = useMemo(() => {
     if (customVariable === 'vaccinations') {
       return {
-        label: 'Vaccinations (total)',
+        label: summaryMetricLabel('vaccinations_total', locale),
         isFlow: false,
         primary: primaryVaccinationsSeries,
         secondary: secondaryVaccinationsSeries,
@@ -239,7 +241,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
     }
     if (customVariable === 'mortality') {
       return {
-        label: 'Mortality (%)',
+        label: summaryMetricLabel('mortality', locale),
         isFlow: false,
         primary: primaryMortalitySeries,
         secondary: secondaryMortalitySeries,
@@ -250,7 +252,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
       };
     }
     return {
-      label: summaryMetricLabel(metric),
+      label: summaryMetricLabel(metric, locale),
       isFlow: isFlowMetric,
       primary: primarySeries,
       secondary: secondarySeries,
@@ -263,6 +265,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
     customVariable,
     isFlowMetric,
     metric,
+    locale,
     primaryMortalitySeries,
     primarySeries,
     primaryVaccinationsSeries,
@@ -302,8 +305,8 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   const includeSecondary = customView === 'overlay' || customView === 'normalized' ? showSecondarySeries : true;
 
   const customTraces = useMemo(() => {
-    const primaryLabel = primaryName || primary?.name || 'Primary';
-    const secondaryLabel = secondaryName || secondary?.name || 'Compare';
+    const primaryLabel = primaryName || primary?.name || copy.compare.primary;
+    const secondaryLabel = secondaryName || secondary?.name || copy.compare.compare;
 
     if (customView === 'overlay') {
       const traces: Array<Record<string, unknown>> = [];
@@ -343,13 +346,13 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
             x: customDates,
             y: customDifferenceValues,
             type: 'bar',
-            name: 'Gap',
+            name: copy.compare.gapLabel,
             marker: {
               color: customDifferenceValues.map((value) =>
                 value === null ? '#334155' : value >= 0 ? '#4de0ff' : '#ff8a47'
               ),
             },
-            hovertemplate: '%{x}<br>Gap: %{y}<extra></extra>',
+            hovertemplate: `%{x}<br>${copy.compare.gapLabel}: %{y}<extra></extra>`,
           },
         ];
       }
@@ -358,7 +361,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           dates: customDates,
           values: customDifferenceValues,
           style: customStyle,
-          name: 'Gap',
+          name: copy.compare.gapLabel,
           color: '#38bdf8',
           fillColor: 'rgba(56,189,248,0.16)',
         }),
@@ -367,7 +370,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           y: customDates.map(() => 0),
           type: 'scatter',
           mode: 'lines',
-          name: 'Zero',
+          name: copy.compare.zeroLine,
           line: { color: '#64748b', width: 1.3, dash: 'dash' },
           hoverinfo: 'skip',
         },
@@ -382,7 +385,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
             x: customDates,
             y: customRatioValues,
             type: 'bar',
-            name: 'Ratio',
+            name: copy.compare.ratioLabel,
             marker: { color: '#a78bfa' },
           },
           {
@@ -390,7 +393,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
             y: customDates.map(() => 1),
             type: 'scatter',
             mode: 'lines',
-            name: 'Parity',
+            name: copy.compare.parity,
             line: { color: '#64748b', width: 1.2, dash: 'dash' },
             hoverinfo: 'skip',
           },
@@ -401,7 +404,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           dates: customDates,
           values: customRatioValues,
           style: customStyle,
-          name: 'Ratio',
+          name: copy.compare.ratioLabel,
           color: '#a78bfa',
           fillColor: 'rgba(167,139,250,0.16)',
         }),
@@ -410,7 +413,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           y: customDates.map(() => 1),
           type: 'scatter',
           mode: 'lines',
-          name: 'Parity',
+          name: copy.compare.parity,
           line: { color: '#64748b', width: 1.2, dash: 'dash' },
           hoverinfo: 'skip',
         },
@@ -454,7 +457,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           x: customDates,
           y: customShareValues,
           type: 'bar',
-          name: 'Primary share',
+          name: copy.compare.primaryShare,
           marker: { color: '#22c55e' },
           opacity: 0.82,
         },
@@ -463,7 +466,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
           y: customDates.map(() => 50),
           type: 'scatter',
           mode: 'lines',
-          name: 'Parity',
+          name: copy.compare.parity,
           line: { color: '#64748b', width: 1.2, dash: 'dash' },
           hoverinfo: 'skip',
         },
@@ -474,7 +477,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
         dates: customDates,
         values: customShareValues,
         style: customStyle,
-        name: 'Primary share',
+        name: copy.compare.primaryShare,
         color: '#22c55e',
         fillColor: 'rgba(34,197,94,0.16)',
       }),
@@ -483,7 +486,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
         y: customDates.map(() => 50),
         type: 'scatter',
         mode: 'lines',
-        name: 'Parity',
+        name: copy.compare.parity,
         line: { color: '#64748b', width: 1.2, dash: 'dash' },
         hoverinfo: 'skip',
       },
@@ -504,6 +507,13 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
     customShareValues,
     customStyle,
     customView,
+    copy.compare.compare,
+    copy.compare.gapLabel,
+    copy.compare.parity,
+    copy.compare.primary,
+    copy.compare.primaryShare,
+    copy.compare.ratioLabel,
+    copy.compare.zeroLine,
     includePrimary,
     includeSecondary,
     primary?.name,
@@ -513,23 +523,43 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   ]);
 
   const customPlotTitle = useMemo(() => {
-    if (customView === 'overlay') return `${customMeta.label} • Overlay`;
-    if (customView === 'gap') return `${customMeta.label} • Gap (Primary - Compare)`;
+    if (customView === 'overlay') return `${customMeta.label} • ${copy.compare.overlay}`;
+    if (customView === 'gap') return `${customMeta.label} • ${copy.compare.gapPrimaryCompare}`;
     if (customView === 'ratio')
-      return `${customMeta.label} • ${customMeta.isFlow ? 'Cumulative ratio' : 'Ratio'} (Primary / Compare)`;
-    if (customView === 'normalized') return `${customMeta.label} • Normalized index`;
-    return `${customMeta.label} • Primary share (%)`;
-  }, [customMeta.isFlow, customMeta.label, customView]);
+      return `${customMeta.label} • ${
+        customMeta.isFlow ? copy.compare.cumulativeRatioPrimaryCompare : copy.compare.ratioPrimaryCompare
+      }`;
+    if (customView === 'normalized') return `${customMeta.label} • ${copy.compare.normalizedIndexBase100}`;
+    return `${customMeta.label} • ${copy.compare.primarySharePercent}`;
+  }, [
+    copy.compare.cumulativeRatioPrimaryCompare,
+    copy.compare.gapPrimaryCompare,
+    copy.compare.normalizedIndexBase100,
+    copy.compare.overlay,
+    copy.compare.primarySharePercent,
+    copy.compare.ratioPrimaryCompare,
+    customMeta.isFlow,
+    customMeta.label,
+    customView,
+  ]);
 
   const customEmptyMessage = useMemo(() => {
     if ((customView === 'gap' || customView === 'ratio' || customView === 'share') && !customHasOverlap) {
-      return 'Selected variable has no overlapping points for both countries.';
+      return copy.compare.selectedVariableNoOverlap;
     }
     if ((customView === 'overlay' || customView === 'normalized') && !includePrimary && !includeSecondary) {
-      return 'Select at least one series (Primary or Compare).';
+      return copy.compare.selectSeriesPrompt;
     }
-    return 'No data for selected countries and chart options.';
-  }, [customHasOverlap, customView, includePrimary, includeSecondary]);
+    return copy.compare.noDataForOptions;
+  }, [
+    copy.compare.noDataForOptions,
+    copy.compare.selectSeriesPrompt,
+    copy.compare.selectedVariableNoOverlap,
+    customHasOverlap,
+    customView,
+    includePrimary,
+    includeSecondary,
+  ]);
 
   const primaryCrossPoints = buildCrossMetricScatterPoints(primaryVaccinationsSeries, primaryMortalitySeries);
   const secondaryCrossPoints = buildCrossMetricScatterPoints(secondaryVaccinationsSeries, secondaryMortalitySeries);
@@ -538,98 +568,106 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
   return (
     <div className="compare-chart-card">
       <div className="chart-header">
-        <p className="panel-kicker">Custom comparison chart</p>
+        <p className="panel-kicker">{copy.compare.customComparisonChart}</p>
         <div className="compare-header-pills">
-          {headlineRatioLabel ? <span className="pill pill-ghost">Headline ratio: {headlineRatioLabel}</span> : null}
-          {loading ? <span className="pill pill-ghost">Loading…</span> : null}
+          {headlineRatioLabel ? (
+            <span className="pill pill-ghost">
+              {copy.compare.headlineRatio}: {headlineRatioLabel}
+            </span>
+          ) : null}
+          {loading ? <span className="pill pill-ghost">{copy.common.loading}</span> : null}
         </div>
       </div>
 
       <div className="compare-custom-controls">
         <div className="compare-custom-grid">
           <div className="compare-custom-field">
-            <label className="filter-label">Variable</label>
+            <label className="filter-label">{copy.compare.variable}</label>
             <select
               value={customVariable}
               onChange={(event) => setCustomVariable(event.target.value as CompareVariable)}
               className="charts-select compare-custom-select"
             >
-              <option value="selected">Selected metric ({summaryMetricLabel(metric)})</option>
-              {vaccinationsEnabled ? <option value="vaccinations">Vaccinations (total)</option> : null}
-              <option value="mortality">Mortality (%)</option>
+              <option value="selected">
+                {copy.compare.selectedMetric} ({summaryMetricLabel(metric, locale)})
+              </option>
+              {vaccinationsEnabled ? (
+                <option value="vaccinations">{summaryMetricLabel('vaccinations_total', locale)}</option>
+              ) : null}
+              <option value="mortality">{summaryMetricLabel('mortality', locale)}</option>
             </select>
           </div>
 
           <div className="compare-custom-field">
-            <label className="filter-label">View mode</label>
+            <label className="filter-label">{copy.filters.viewMode}</label>
             <div className="mode-toggle">
               <button
                 type="button"
                 className={`pill ${customView === 'overlay' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomView('overlay')}
               >
-                Overlay
+                {copy.compare.overlay}
               </button>
               <button
                 type="button"
                 className={`pill ${customView === 'gap' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomView('gap')}
               >
-                Gap
+                {copy.compare.gap}
               </button>
               <button
                 type="button"
                 className={`pill ${customView === 'ratio' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomView('ratio')}
               >
-                Ratio
+                {copy.compare.ratio}
               </button>
               <button
                 type="button"
                 className={`pill ${customView === 'normalized' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomView('normalized')}
               >
-                Index
+                {copy.compare.index}
               </button>
               <button
                 type="button"
                 className={`pill ${customView === 'share' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomView('share')}
               >
-                Share
+                {copy.compare.share}
               </button>
             </div>
           </div>
 
           <div className="compare-custom-field">
-            <label className="filter-label">Chart style</label>
+            <label className="filter-label">{copy.compare.chartStyle}</label>
             <div className="mode-toggle">
               <button
                 type="button"
                 className={`pill ${customStyle === 'line' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomStyle('line')}
               >
-                Line
+                {copy.charts.line}
               </button>
               <button
                 type="button"
                 className={`pill ${customStyle === 'area' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomStyle('area')}
               >
-                Area
+                {copy.charts.area}
               </button>
               <button
                 type="button"
                 className={`pill ${customStyle === 'bar' ? 'pill-active' : 'pill-ghost'}`}
                 onClick={() => setCustomStyle('bar')}
               >
-                Bar
+                {copy.charts.bar}
               </button>
             </div>
           </div>
 
           <div className="compare-custom-field">
-            <label className="filter-label">Series</label>
+            <label className="filter-label">{copy.compare.series}</label>
             <div className="mode-toggle">
               <button
                 type="button"
@@ -638,7 +676,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                   setShowPrimarySeries((current) => (current && !showSecondarySeries ? true : !current))
                 }
               >
-                Primary
+                {copy.compare.primary}
               </button>
               <button
                 type="button"
@@ -647,7 +685,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                   setShowSecondarySeries((current) => (current && !showPrimarySeries ? true : !current))
                 }
               >
-                Compare
+                {copy.compare.compare}
               </button>
             </div>
           </div>
@@ -692,7 +730,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
       <div className="compare-extra-grid">
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Gap (Primary - Compare)</p>
+            <p className="panel-kicker">{copy.compare.gapPrimaryCompare}</p>
           </div>
           {hasOverlappingSeries ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
@@ -707,7 +745,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                         value === null ? '#334155' : value >= 0 ? '#4de0ff' : '#ff8a47'
                       ),
                     },
-                    hovertemplate: '%{x}<br>Gap: %{y}<extra></extra>',
+                    hovertemplate: `%{x}<br>${copy.compare.gapLabel}: %{y}<extra></extra>`,
                   },
                 ]}
                 layout={{
@@ -725,14 +763,14 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">Select two countries with overlapping data.</div>
+            <div className="chart-placeholder">{copy.compare.selectCountriesOverlap}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
             <p className="panel-kicker">
-              {isFlowMetric ? 'Cumulative Ratio (Primary / Compare)' : 'Ratio (Primary / Compare)'}
+              {isFlowMetric ? copy.compare.cumulativeRatioPrimaryCompare : copy.compare.ratioPrimaryCompare}
             </p>
           </div>
           {hasOverlappingSeries ? (
@@ -744,16 +782,16 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                     y: ratioValues,
                     type: 'scatter',
                     mode: 'lines',
-                    name: 'Ratio',
+                    name: copy.compare.ratioLabel,
                     line: { color: '#9b8cff', width: 2.2 },
-                    hovertemplate: '%{x}<br>Ratio: %{y:.6f}x<extra></extra>',
+                    hovertemplate: `%{x}<br>${copy.compare.ratioLabel}: %{y:.6f}x<extra></extra>`,
                   },
                   {
                     x: alignedDates,
                     y: alignedDates.map(() => 1),
                     type: 'scatter',
                     mode: 'lines',
-                    name: 'Parity',
+                    name: copy.compare.parity,
                     line: { color: '#64748b', width: 1.4, dash: 'dash' },
                     hoverinfo: 'skip',
                   },
@@ -774,13 +812,13 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">Select two countries with overlapping data.</div>
+            <div className="chart-placeholder">{copy.compare.selectCountriesOverlap}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Normalized Index (Base = 100)</p>
+            <p className="panel-kicker">{copy.compare.normalizedIndexBase100}</p>
           </div>
           {hasOverlappingSeries ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
@@ -791,7 +829,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                     y: normalizedPrimary,
                     type: 'scatter',
                     mode: 'lines',
-                    name: primaryName || primary?.name || 'Primary',
+                    name: primaryName || primary?.name || copy.compare.primary,
                     line: { color: '#4de0ff', width: 2.2 },
                   },
                   {
@@ -799,7 +837,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                     y: normalizedSecondary,
                     type: 'scatter',
                     mode: 'lines',
-                    name: secondaryName || secondary?.name || 'Compare',
+                    name: secondaryName || secondary?.name || copy.compare.compare,
                     line: { color: '#ff8a47', width: 2.2 },
                   },
                 ]}
@@ -819,13 +857,13 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">Select two countries with overlapping data.</div>
+            <div className="chart-placeholder">{copy.compare.selectCountriesOverlap}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Primary Share (%)</p>
+            <p className="panel-kicker">{copy.compare.primarySharePercent}</p>
           </div>
           {hasOverlappingSeries ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
@@ -839,7 +877,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                     line: { color: '#22c55e', width: 2.2 },
                     fill: 'tozeroy',
                     fillcolor: 'rgba(34,197,94,0.14)',
-                    hovertemplate: '%{x}<br>Primary share: %{y}%<extra></extra>',
+                    hovertemplate: `%{x}<br>${copy.compare.primaryShare}: %{y}%<extra></extra>`,
                   },
                   {
                     x: alignedDates,
@@ -865,16 +903,16 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">Select two countries with overlapping data.</div>
+            <div className="chart-placeholder">{copy.compare.selectCountriesOverlap}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Vaccinations (total) trend</p>
+            <p className="panel-kicker">{copy.compare.vaccinationsTrend}</p>
           </div>
           {!vaccinationsEnabled ? (
-            <div className="chart-placeholder">Vaccination comparisons are available only in Total mode.</div>
+            <div className="chart-placeholder">{copy.compare.vaccinationCompareOnlyTotal}</div>
           ) : primaryVaccinationsSeries.length || secondaryVaccinationsSeries.length ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
@@ -886,7 +924,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           y: primaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
                           type: 'scatter',
                           mode: 'lines',
-                          name: primaryName || primary?.name || 'Primary',
+                          name: primaryName || primary?.name || copy.compare.primary,
                           line: { color: '#80ed99', width: 2.2 },
                           fill: 'tozeroy',
                           fillcolor: 'rgba(128,237,153,0.14)',
@@ -900,7 +938,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           y: secondaryVaccinationsSeries.map((point: SeriesPoint) => point.value ?? null),
                           type: 'scatter',
                           mode: 'lines',
-                          name: secondaryName || secondary?.name || 'Compare',
+                          name: secondaryName || secondary?.name || copy.compare.compare,
                           line: { color: '#2ec4b6', width: 2.2 },
                         },
                       ]
@@ -922,13 +960,13 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">No total vaccination series for selected countries.</div>
+            <div className="chart-placeholder">{copy.compare.noTotalVaccinationSeries}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Mortality comparison</p>
+            <p className="panel-kicker">{copy.compare.mortalityComparison}</p>
           </div>
           {primaryMortalitySeries.length || secondaryMortalitySeries.length ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
@@ -940,7 +978,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           x: primaryMortalitySeries.map((point: SeriesPoint) => point.date),
                           y: primaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
                           type: 'bar',
-                          name: primaryName || primary?.name || 'Primary',
+                          name: primaryName || primary?.name || copy.compare.primary,
                           marker: { color: 'rgba(255,138,71,0.7)' },
                           opacity: 0.75,
                         },
@@ -953,7 +991,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           y: secondaryMortalitySeries.map((point: SeriesPoint) => point.value ?? null),
                           type: 'scatter',
                           mode: 'lines',
-                          name: secondaryName || secondary?.name || 'Compare',
+                          name: secondaryName || secondary?.name || copy.compare.compare,
                           line: { color: '#f78fb3', width: 2.3 },
                         },
                       ]
@@ -976,16 +1014,16 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">No mortality series for selected countries.</div>
+            <div className="chart-placeholder">{copy.compare.noMortalitySeries}</div>
           )}
         </div>
 
         <div className="compare-chart-card compare-chart-card-compact">
           <div className="chart-header">
-            <p className="panel-kicker">Vaccinations vs Mortality (scatter)</p>
+            <p className="panel-kicker">{copy.compare.vaccinationsVsMortalityScatter}</p>
           </div>
           {!vaccinationsEnabled ? (
-            <div className="chart-placeholder">Vaccination comparisons are available only in Total mode.</div>
+            <div className="chart-placeholder">{copy.compare.vaccinationCompareOnlyTotal}</div>
           ) : hasCrossMetricPoints ? (
             <div className="compare-plot-frame compare-plot-frame-compact">
               <Plot
@@ -998,9 +1036,9 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           text: primaryCrossPoints.map((point) => point.date),
                           type: 'scatter',
                           mode: 'markers',
-                          name: primaryName || primary?.name || 'Primary',
+                          name: primaryName || primary?.name || copy.compare.primary,
                           marker: { color: '#4de0ff', size: 7, opacity: 0.72 },
-                          hovertemplate: '%{text}<br>Vaccinations: %{x}<br>Mortality: %{y:.2f}%<extra></extra>',
+                          hovertemplate: `%{text}<br>${summaryMetricLabel('vaccinations_total', locale)}: %{x}<br>${summaryMetricLabel('mortality', locale)}: %{y:.2f}%<extra></extra>`,
                         },
                       ]
                     : []),
@@ -1012,9 +1050,9 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                           text: secondaryCrossPoints.map((point) => point.date),
                           type: 'scatter',
                           mode: 'markers',
-                          name: secondaryName || secondary?.name || 'Compare',
+                          name: secondaryName || secondary?.name || copy.compare.compare,
                           marker: { color: '#ff8a47', size: 7, opacity: 0.72, symbol: 'diamond' },
-                          hovertemplate: '%{text}<br>Vaccinations: %{x}<br>Mortality: %{y:.2f}%<extra></extra>',
+                          hovertemplate: `%{text}<br>${summaryMetricLabel('vaccinations_total', locale)}: %{x}<br>${summaryMetricLabel('mortality', locale)}: %{y:.2f}%<extra></extra>`,
                         },
                       ]
                     : []),
@@ -1028,12 +1066,12 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
                   xaxis: {
                     gridcolor: '#1f2937',
                     tickfont: { color: '#8ea0b7' },
-                    title: { text: 'Vaccinations (total)', font: { color: '#8ea0b7', size: 11 } },
+                    title: { text: summaryMetricLabel('vaccinations_total', locale), font: { color: '#8ea0b7', size: 11 } },
                   },
                   yaxis: {
                     gridcolor: '#1f2937',
                     tickfont: { color: '#8ea0b7' },
-                    title: { text: 'Mortality (%)', font: { color: '#8ea0b7', size: 11 } },
+                    title: { text: summaryMetricLabel('mortality', locale), font: { color: '#8ea0b7', size: 11 } },
                   },
                   legend: { orientation: 'h', y: 1.11, x: 0 },
                 }}
@@ -1043,7 +1081,7 @@ const CompareTrendChart: React.FC<CompareTrendChartProps> = ({
               />
             </div>
           ) : (
-            <div className="chart-placeholder">No overlapping total vaccination + mortality points.</div>
+            <div className="chart-placeholder">{copy.compare.noVaccinationMortalityOverlap}</div>
           )}
         </div>
       </div>

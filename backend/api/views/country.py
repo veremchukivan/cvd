@@ -17,7 +17,7 @@ from .shared import (
     _parse_date,
     _round,
 )
-from .summary_rows import _build_mortality_series
+from .summary_series import _build_mortality_series
 
 def _build_country_snapshot(location: Location, anchor_date: date | None) -> dict:
     qs = DataPoint.objects.filter(location=location, metric__in=SNAPSHOT_METRICS)

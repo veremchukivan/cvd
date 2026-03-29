@@ -13,6 +13,7 @@ import ChartsDynamicsSection, {
   WeekdayProfilePoint,
 } from '../components/charts/ChartsDynamicsSection';
 import ChartsFilterPanel from '../components/charts/ChartsFilterPanel';
+import ChartsGeolocationConsentModal from '../components/charts/ChartsGeolocationConsentModal';
 import ChartsMetricCardsSection from '../components/charts/ChartsMetricCardsSection';
 import ChartsOverviewSection from '../components/charts/ChartsOverviewSection';
 import { countryMatches, maybeBuildCountryQuery, quickRangeBounds } from '../lib/analytics';
@@ -96,11 +97,13 @@ const ChartsView: React.FC = () => {
     to: today,
   });
   const [countryIso, setCountryIso] = useState<string | null>(null);
+  const [geolocationConsent, setGeolocationConsent] = useState<'pending' | 'accepted' | 'declined'>('pending');
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const countrySearchRef = useRef<HTMLDivElement | null>(null);
   const countryIsoRef = useRef<string | null>(null);
   const initialCountryResolvedRef = useRef(false);
+  const geolocationSupported = typeof navigator !== 'undefined' && Boolean(navigator.geolocation);
   const chartMetricCards = useMemo(() => chartMetricCardsForMode(dateMode, locale), [dateMode, locale]);
   const vaccinationsEnabled = dateMode === 'total';
   const vaccinationMetric: SummaryMetric | null = vaccinationsEnabled ? 'vaccinations_total' : null;
@@ -132,43 +135,42 @@ const ChartsView: React.FC = () => {
     return countryOptions.filter((item) => countryMatches(item.name, item.iso3, countrySearch));
   }, [countryOptions, countrySearch]);
 
-  useEffect(() => {
-    if (countryIso || !countryOptions.length || initialCountryResolvedRef.current) {
+  const applyCountrySelection = (preferredIso?: string | null) => {
+    if (countryIsoRef.current || initialCountryResolvedRef.current || !countryOptions.length) {
       return;
     }
 
-    let cancelled = false;
     const browserGuess = guessCountryIso3FromBrowser();
+    const normalizedIso = preferredIso?.trim().toUpperCase();
+    const match = normalizedIso
+      ? countryOptions.find((item) => item.iso3 === normalizedIso)
+      : null;
+    const browserMatch = browserGuess
+      ? countryOptions.find((item) => item.iso3 === browserGuess)
+      : null;
+    const fallback = countryOptions.find((item) => item.iso3 === 'USA') || countryOptions[0];
+    const selected = match || browserMatch || fallback;
 
-    const applyCountrySelection = (preferredIso?: string | null) => {
-      if (cancelled || countryIsoRef.current || initialCountryResolvedRef.current) {
-        return;
-      }
+    if (!selected) {
+      return;
+    }
 
-      const normalizedIso = preferredIso?.trim().toUpperCase();
-      const match = normalizedIso
-        ? countryOptions.find((item) => item.iso3 === normalizedIso)
-        : null;
-      const browserMatch = browserGuess
-        ? countryOptions.find((item) => item.iso3 === browserGuess)
-        : null;
-      const fallback = countryOptions.find((item) => item.iso3 === 'USA') || countryOptions[0];
-      const selected = match || browserMatch || fallback;
+    initialCountryResolvedRef.current = true;
+    setCountryIso(selected.iso3);
+    setCountrySearch(selected.name);
+  };
 
-      if (!selected) {
-        return;
-      }
+  const handleDeclineGeolocation = () => {
+    setGeolocationConsent('declined');
+    applyCountrySelection();
+  };
 
-      initialCountryResolvedRef.current = true;
-      setCountryIso(selected.iso3);
-      setCountrySearch(selected.name);
-    };
+  const handleAcceptGeolocation = () => {
+    setGeolocationConsent('accepted');
 
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      applyCountrySelection(browserGuess);
-      return () => {
-        cancelled = true;
-      };
+    if (!geolocationSupported) {
+      applyCountrySelection();
+      return;
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -178,13 +180,13 @@ const ChartsView: React.FC = () => {
             position.coords.latitude,
             position.coords.longitude
           );
-          applyCountrySelection(detectedIso || guessCountryIso3FromBrowser());
+          applyCountrySelection(detectedIso);
         } catch {
-          applyCountrySelection(guessCountryIso3FromBrowser());
+          applyCountrySelection();
         }
       },
       () => {
-        applyCountrySelection(guessCountryIso3FromBrowser());
+        applyCountrySelection();
       },
       {
         enableHighAccuracy: false,
@@ -192,11 +194,20 @@ const ChartsView: React.FC = () => {
         maximumAge: 30 * 60 * 1000,
       }
     );
+  };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [countryIso, countryOptions]);
+  useEffect(() => {
+    if (
+      countryIso ||
+      !countryOptions.length ||
+      initialCountryResolvedRef.current ||
+      geolocationConsent !== 'declined'
+    ) {
+      return;
+    }
+
+    applyCountrySelection();
+  }, [countryIso, countryOptions, geolocationConsent]);
 
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
@@ -213,7 +224,7 @@ const ChartsView: React.FC = () => {
     queries: chartMetricCards.map((item) => {
       const query = maybeBuildCountryQuery(countryIso, item.metric, dateMode, date, range);
       return {
-        queryKey: ['charts-country-metric', query],
+        queryKey: ['charts-country-metric', item.metric, query],
         queryFn: () => {
           if (!query) throw new Error('Missing country');
           return fetchCountryDetails(query);
@@ -493,9 +504,20 @@ const ChartsView: React.FC = () => {
       })),
     [chartMetricCards, metricQueries]
   );
+  const shouldShowGeolocationConsent =
+    !countryIso && countryOptions.length > 0 && !initialCountryResolvedRef.current && geolocationConsent === 'pending';
 
   return (
     <div className="page compare-page">
+      {shouldShowGeolocationConsent ? (
+        <ChartsGeolocationConsentModal
+          copy={copy.charts.geolocationConsent}
+          geolocationSupported={geolocationSupported}
+          onAccept={handleAcceptGeolocation}
+          onDecline={handleDeclineGeolocation}
+        />
+      ) : null}
+
       <header className="page-header">
         <div>
           <p className="eyebrow">{copy.charts.eyebrow}</p>

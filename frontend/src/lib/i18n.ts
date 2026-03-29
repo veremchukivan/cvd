@@ -357,6 +357,20 @@ export const appCopy = {
       lede:
         'Explore flow, weekly rhythm and outcome mix for one country in a selected day, period, or total mode.',
       bannerError: 'Unable to load one or more country metrics.',
+      geolocationConsent: {
+        eyebrow: 'Location access',
+        title: 'Share your location with this page?',
+        description:
+          'Allow the graphs page to request your location so we can preselect the country automatically.',
+        browserPromptNote:
+          'After you continue, the browser may still show its native geolocation permission prompt.',
+        browserUnavailable:
+          'Geolocation is not available in this browser context, so the page will use timezone and browser language instead.',
+        fallbackNotice:
+          'If you continue without geolocation, we will choose a starting country from timezone or browser language, and you can still change it manually.',
+        accept: 'Allow geolocation',
+        decline: 'Continue without geolocation',
+      },
       defaultCountry: 'Country',
       snapshot: 'Snapshot',
       countryOverview: 'Country overview',
@@ -780,6 +794,20 @@ export const appCopy = {
       lede:
         'Досліджуйте потоки, тижневий ритм і структуру результатів для однієї країни в режимі дня, періоду або загального підсумку.',
       bannerError: 'Не вдалося завантажити одну або кілька метрик країни.',
+      geolocationConsent: {
+        eyebrow: 'Доступ до геолокації',
+        title: 'Надати цій сторінці доступ до вашої геолокації?',
+        description:
+          'Дозвольте сторінці графіків запросити вашу геолокацію, щоб ми могли автоматично вибрати країну.',
+        browserPromptNote:
+          'Після продовження браузер може показати ще одне стандартне вікно дозволу на геолокацію.',
+        browserUnavailable:
+          'У цьому середовищі геолокація недоступна, тому сторінка використає часовий пояс і мову браузера.',
+        fallbackNotice:
+          'Якщо продовжити без геолокації, ми виберемо стартову країну за часовим поясом або мовою браузера, і ви все одно зможете змінити її вручну.',
+        accept: 'Дозволити геолокацію',
+        decline: 'Продовжити без геолокації',
+      },
       defaultCountry: 'Країна',
       snapshot: 'Знімок',
       countryOverview: 'Огляд країни',
@@ -1203,6 +1231,20 @@ export const appCopy = {
       lede:
         'Изучайте потоки, недельный ритм и структуру результатов для одной страны в режиме дня, периода или общего итога.',
       bannerError: 'Не удалось загрузить одну или несколько метрик страны.',
+      geolocationConsent: {
+        eyebrow: 'Доступ к геолокации',
+        title: 'Разрешить этой странице получить вашу геолокацию?',
+        description:
+          'Разрешите странице графиков запросить вашу геолокацию, чтобы мы могли автоматически выбрать страну.',
+        browserPromptNote:
+          'После продолжения браузер может показать еще одно стандартное окно разрешения на геолокацию.',
+        browserUnavailable:
+          'В этой среде геолокация недоступна, поэтому страница использует часовой пояс и язык браузера.',
+        fallbackNotice:
+          'Если продолжить без геолокации, мы выберем стартовую страну по часовому поясу или языку браузера, и вы все равно сможете изменить ее вручную.',
+        accept: 'Разрешить геолокацию',
+        decline: 'Продолжить без геолокации',
+      },
       defaultCountry: 'Страна',
       snapshot: 'Снимок',
       countryOverview: 'Обзор страны',
@@ -1626,6 +1668,20 @@ export const appCopy = {
       lede:
         'Skúmajte tok dát, týždenný rytmus a štruktúru výsledkov pre jednu krajinu v režime dňa, obdobia alebo celkového súhrnu.',
       bannerError: 'Nepodarilo sa načítať jednu alebo viac metrík krajiny.',
+      geolocationConsent: {
+        eyebrow: 'Prístup k polohe',
+        title: 'Povoliť tejto stránke získať vašu polohu?',
+        description:
+          'Povoľte stránke s grafmi požiadať o vašu polohu, aby sme mohli automaticky predvoliť krajinu.',
+        browserPromptNote:
+          'Po pokračovaní môže prehliadač stále zobraziť svoje natívne povolenie pre geolokáciu.',
+        browserUnavailable:
+          'Geolokácia nie je v tomto prostredí dostupná, takže stránka použije časové pásmo a jazyk prehliadača.',
+        fallbackNotice:
+          'Ak budete pokračovať bez geolokácie, vyberieme počiatočnú krajinu podľa časového pásma alebo jazyka prehliadača a stále ju budete môcť zmeniť ručne.',
+        accept: 'Povoliť geolokáciu',
+        decline: 'Pokračovať bez geolokácie',
+      },
       defaultCountry: 'Krajina',
       snapshot: 'Snímka',
       countryOverview: 'Prehľad krajiny',
